@@ -1,0 +1,1484 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#5e806c">
+<title>Therapie-Protokoll</title>
+<!--
+  PATIENTEN-APP  (index.html)
+  ============================
+  Eine einzige, vollständig selbstenthaltene Datei. Gebaut nach BUILD_SPEC.md.
+
+  Architektur (bewusste Trennung): Diese Datei ist AUSSCHLIESSLICH die Patienten-App.
+  Sie enthält physisch KEINEN Template-Editor und keine Verwaltungsfunktion – auch nicht
+  versteckt oder auskommentiert. Templates kommen nur über den Teilen-Link (#tpl=...) herein
+  und können ausschließlich genutzt, nicht verändert werden. Die Template-Verwaltung liegt
+  in einer getrennten Datei (admin.html), die nicht von hier verlinkt ist.
+
+  Harte Regeln:
+   1. Null externe Aufrufe (keine Fonts/CDN/Analytics/Bilder von außen).
+   2. Eine Datei (HTML + CSS + JS + Krypto + PDF-Generator inline).
+   3. Passiver Rekorder: keine Auswertung, Bewertung, Scores, Alarme.
+   4. Kein Tracking, keine Konten, kein Sync, keine Cloud.
+
+  Technische Entscheidung PDF: statt einer großen externen Bibliothek enthält diese Datei
+  einen kompakten, selbst geschriebenen PDF-Generator mit dem PDF-Standard-Sicherheitshandler
+  (RC4, Revision 2 / 40-Bit) für den Passwortschutz – der von der Spec akzeptierte "moderate"
+  Schutz, ohne externe Abhängigkeit.
+-->
+<style>
+  :root{
+    --bg:#eef2ec; --surface:#ffffff; --surface-2:#f6f9f4;
+    --ink:#28312c; --muted:#5c6b62; --line:#d5ddd1;
+    --sage:#5e806c; --sage-strong:#496554; --sage-soft:#e3ede4;
+    --focus:#2f5c47; --danger:#a24a40; --danger-soft:#f6e7e4;
+    --radius:14px; --tap:52px; --maxw:640px;
+    --shadow:0 1px 2px rgba(40,60,50,.06), 0 6px 20px rgba(40,60,50,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#161c19; --surface:#1e2622; --surface-2:#232d28;
+      --ink:#e7eee8; --muted:#a3b1a8; --line:#33403a;
+      --sage:#8fb39c; --sage-strong:#a9c7b4; --sage-soft:#26312b;
+      --focus:#9fc7ac; --danger:#e0908a; --danger-soft:#3a2624;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.3);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;
+    font-size:17px; line-height:1.5;
+    -webkit-text-size-adjust:100%;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:16px 16px 40px}
+  h1{font-size:1.5rem; line-height:1.25; margin:.2em 0 .4em; letter-spacing:-.01em}
+  h2{font-size:1.2rem; margin:1.2em 0 .5em}
+  h3{font-size:1.02rem; margin:1em 0 .35em}
+  p{margin:.5em 0}
+  .muted{color:var(--muted)}
+  .small{font-size:.9rem}
+  a{color:var(--sage-strong)}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+        padding:16px; margin:12px 0; box-shadow:var(--shadow)}
+  .stack>*+*{margin-top:12px}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .spread{display:flex; gap:10px; align-items:center; justify-content:space-between}
+  .grow{flex:1 1 auto; min-width:0}
+  label{display:block; font-weight:600; margin:.2em 0 .3em}
+  .hint{font-weight:400; color:var(--muted); font-size:.9rem; margin:-.1em 0 .4em}
+  input,textarea,select{
+    width:100%; font:inherit; color:var(--ink);
+    background:var(--surface-2); border:1.5px solid var(--line); border-radius:10px;
+    padding:12px 12px; min-height:var(--tap);
+  }
+  textarea{min-height:110px; resize:vertical}
+  input[type=range]{padding:0; min-height:auto; accent-color:var(--sage)}
+  input[type=checkbox],input[type=radio]{width:24px; height:24px; min-height:auto; accent-color:var(--sage); flex:0 0 auto}
+  button{font:inherit}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    min-height:var(--tap); padding:12px 18px; border-radius:12px; cursor:pointer;
+    border:1.5px solid var(--sage); background:var(--sage); color:#fff; font-weight:650;
+    text-decoration:none; line-height:1.2;
+  }
+  .btn.block{width:100%}
+  .btn.secondary{background:transparent; color:var(--sage-strong); border-color:var(--sage)}
+  .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line)}
+  .btn.danger{background:transparent; color:var(--danger); border-color:var(--danger)}
+  .btn.small{min-height:40px; padding:8px 12px; font-size:.92rem; border-radius:10px}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+  .btn:active{transform:translateY(1px)}
+  :focus-visible{outline:3px solid var(--focus); outline-offset:2px; border-radius:6px}
+  .choice{display:flex; align-items:center; gap:12px; padding:12px; border:1.5px solid var(--line);
+          border-radius:12px; background:var(--surface-2); cursor:pointer; min-height:var(--tap); font-weight:500}
+  .choice input{margin:0}
+  .choice.selected{border-color:var(--sage); background:var(--sage-soft)}
+  .pill{display:inline-block; font-size:.78rem; padding:2px 10px; border-radius:999px;
+        background:var(--sage-soft); color:var(--sage-strong); font-weight:650}
+  .divider{height:1px; background:var(--line); margin:14px 0; border:0}
+  .topbar{display:flex; align-items:center; gap:10px; justify-content:space-between; margin-bottom:4px}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:750; letter-spacing:-.01em}
+  .leaf{width:26px; height:26px; flex:0 0 auto}
+  .notice{border-left:4px solid var(--sage); background:var(--surface-2); padding:12px 14px; border-radius:8px}
+  .notice.warn{border-color:var(--danger); background:var(--danger-soft)}
+  .entry{border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--surface)}
+  .entry+.entry{margin-top:10px}
+  .kv{margin:.15em 0}
+  .kv b{font-weight:650}
+  .scaleval{font-variant-numeric:tabular-nums; font-weight:700; color:var(--sage-strong); min-width:2.4em; text-align:right}
+  .steps{display:flex; gap:6px; margin:8px 0 16px}
+  .steps>span{flex:1; height:6px; border-radius:3px; background:var(--line)}
+  .steps>span.on{background:var(--sage)}
+  .langtoggle{display:inline-flex; border:1.5px solid var(--line); border-radius:999px; overflow:hidden}
+  .langtoggle button{border:0; background:transparent; color:var(--muted); padding:8px 14px; min-height:40px; cursor:pointer; font-weight:650}
+  .langtoggle button.on{background:var(--sage); color:#fff}
+  .fielded{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
+  .fielded+.fielded{margin-top:10px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  @media (max-width:460px){ .grid2{grid-template-columns:1fr} }
+  .center{text-align:center}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+         background:var(--ink); color:var(--bg); padding:12px 18px; border-radius:12px; box-shadow:var(--shadow);
+         max-width:90%; z-index:50}
+  @media (prefers-reduced-motion: no-preference){
+    .btn,.choice{transition:transform .06s ease, background .15s ease, border-color .15s ease}
+    .screen{animation:fade .18s ease}
+    @keyframes fade{from{opacity:0} to{opacity:1}}
+  }
+</style>
+
+<div class="wrap" id="app" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   0. Zentrale Konstanten  (Umzug GitHub Pages -> Praxis-Subdomain = 1 Zeile)
+   ========================================================================= */
+// Bei Umzug auf die Praxis-Subdomain nur diese Zeile ändern. Zeigt auf die PATIENTEN-App
+// (diese Datei) und fließt in Template-Teilen-Links und den .ics-Termin ein.
+const PROTOKOLL_APP_URL = "https://izze5.github.io/therapie-protokoll-test/index.html";
+
+// Notfallnummern: Platzhalter — von der Praxis final zu prüfen/eintragen.
+const NOTFALL = {
+  seelsorge: "Telefonseelsorge 0800 111 0 111 / 0800 111 0 222 (kostenlos, rund um die Uhr)",
+  notruf: "Notruf 112",
+  praxis: "[Praxis-Notfallhinweis hier eintragen]"
+};
+
+const KDF_ITERATIONS = 210000;
+const LS_KEYS = { meta:"tp_meta_v1", vault:"tp_vault_v1", templates:"tp_templates_v1", prefs:"tp_prefs_v1" };
+
+/* =========================================================================
+   1. localStorage-Helfer
+   ========================================================================= */
+const LS = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+
+/* =========================================================================
+   2. Base64 / Teilen-Link Kodierung   [IDENTISCH in index.html und admin.html]
+   ========================================================================= */
+function bytesToB64(bytes){
+  let s=""; const CH=0x8000;
+  for(let i=0;i<bytes.length;i+=CH){ s+=String.fromCharCode.apply(null, bytes.subarray(i,i+CH)); }
+  return btoa(s);
+}
+function b64ToBytes(b64){
+  const s=atob(b64); const out=new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) out[i]=s.charCodeAt(i);
+  return out;
+}
+function b64url(b64){ return b64.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function unb64url(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; return s; }
+function encodeObjToHash(obj){ return b64url(bytesToB64(new TextEncoder().encode(JSON.stringify(obj)))); }
+function decodeHashToObj(s){ return JSON.parse(new TextDecoder().decode(b64ToBytes(unb64url(s)))); }
+
+// WinAnsi (CP1252)-Bytes aus JS-String (für PDF-Textkodierung, nur Patienten-App)
+const WINANSI_HIGH = { 0x20AC:0x80,0x201A:0x82,0x0192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,
+  0x2021:0x87,0x02C6:0x88,0x2030:0x89,0x0160:0x8A,0x2039:0x8B,0x0152:0x8C,0x017D:0x8E,
+  0x2018:0x91,0x2019:0x92,0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,
+  0x02DC:0x98,0x2122:0x99,0x0161:0x9A,0x203A:0x9B,0x0153:0x9C,0x017E:0x9E,0x0178:0x9F };
+function toWinAnsi(str){
+  const out=[];
+  for(const ch of str){
+    const cp=ch.codePointAt(0);
+    if(cp<=0x7F){ out.push(cp); }
+    else if(cp>=0xA0 && cp<=0xFF){ out.push(cp); }
+    else if(WINANSI_HIGH[cp]!==undefined){ out.push(WINANSI_HIGH[cp]); }
+    else { out.push(0x3F); } // '?'
+  }
+  return new Uint8Array(out);
+}
+
+/* =========================================================================
+   3. Krypto für lokalen Speicher (WebCrypto, PBKDF2 + AES-GCM)
+   ========================================================================= */
+async function deriveKey(pin, saltBytes, iterations){
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt:saltBytes, iterations, hash:"SHA-256" },
+    base, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]
+  );
+}
+async function encryptJSON(key, obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new TextEncoder().encode(JSON.stringify(obj));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, data));
+  const out = new Uint8Array(12+ct.length); out.set(iv,0); out.set(ct,12);
+  return bytesToB64(out);
+}
+async function decryptJSON(key, b64){
+  const raw = b64ToBytes(b64);
+  const iv = raw.subarray(0,12); const ct = raw.subarray(12);
+  const pt = await crypto.subtle.decrypt({ name:"AES-GCM", iv }, key, ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+/* =========================================================================
+   4. MD5 + RC4  (nur für PDF-Standardverschlüsselung)
+   ========================================================================= */
+function md5(input){
+  const n=input.length;
+  const numBlocks=Math.ceil((n+9)/64);
+  const total=numBlocks*64;
+  const b=new Uint8Array(total);
+  b.set(input); b[n]=0x80;
+  const bitsLo=(n*8)>>>0, bitsHi=Math.floor(n/0x20000000)>>>0;
+  b[total-8]=bitsLo&255; b[total-7]=(bitsLo>>>8)&255; b[total-6]=(bitsLo>>>16)&255; b[total-5]=(bitsLo>>>24)&255;
+  b[total-4]=bitsHi&255; b[total-3]=(bitsHi>>>8)&255; b[total-2]=(bitsHi>>>16)&255; b[total-1]=(bitsHi>>>24)&255;
+  const S=[7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+           4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const K=new Uint32Array(64);
+  for(let i=0;i<64;i++) K[i]=(Math.floor(Math.abs(Math.sin(i+1))*4294967296))>>>0;
+  let a0=0x67452301,b0=0xefcdab89,c0=0x98badcfe,d0=0x10325476;
+  const M=new Int32Array(16);
+  for(let off=0;off<total;off+=64){
+    for(let i=0;i<16;i++){ const j=off+i*4; M[i]=b[j]|(b[j+1]<<8)|(b[j+2]<<16)|(b[j+3]<<24); }
+    let A=a0,B=b0,C=c0,D=d0;
+    for(let i=0;i<64;i++){
+      let F,g;
+      if(i<16){ F=(B&C)|(~B&D); g=i; }
+      else if(i<32){ F=(D&B)|(~D&C); g=(5*i+1)&15; }
+      else if(i<48){ F=B^C^D; g=(3*i+5)&15; }
+      else { F=C^(B|~D); g=(7*i)&15; }
+      F=(F+A+K[i]+M[g])|0; A=D; D=C; C=B;
+      B=(B+((F<<S[i])|(F>>>(32-S[i]))))|0;
+    }
+    a0=(a0+A)|0; b0=(b0+B)|0; c0=(c0+C)|0; d0=(d0+D)|0;
+  }
+  const out=new Uint8Array(16); const w=[a0,b0,c0,d0];
+  for(let i=0;i<4;i++){ out[i*4]=w[i]&255; out[i*4+1]=(w[i]>>>8)&255; out[i*4+2]=(w[i]>>>16)&255; out[i*4+3]=(w[i]>>>24)&255; }
+  return out;
+}
+function rc4(key, data){
+  const s=new Uint8Array(256); for(let i=0;i<256;i++) s[i]=i;
+  let j=0; for(let i=0;i<256;i++){ j=(j+s[i]+key[i%key.length])&255; const t=s[i]; s[i]=s[j]; s[j]=t; }
+  const out=new Uint8Array(data.length); let a=0,b=0;
+  for(let k=0;k<data.length;k++){ a=(a+1)&255; b=(b+s[a])&255; const t=s[a]; s[a]=s[b]; s[b]=t; out[k]=data[k]^s[(s[a]+s[b])&255]; }
+  return out;
+}
+
+/* =========================================================================
+   5. Minimaler PDF-Generator mit Passwortschutz (Helvetica, A4)
+   ========================================================================= */
+const HELV_W = (function(){
+  const w=new Array(256).fill(556);
+  const asc={32:278,33:278,34:355,35:556,36:556,37:889,38:667,39:191,40:333,41:333,42:389,43:584,44:278,45:333,46:278,47:278,
+    48:556,49:556,50:556,51:556,52:556,53:556,54:556,55:556,56:556,57:556,58:278,59:278,60:584,61:584,62:584,63:556,64:1015,
+    65:667,66:667,67:722,68:722,69:667,70:611,71:778,72:722,73:278,74:500,75:667,76:556,77:833,78:722,79:778,80:667,81:778,
+    82:722,83:667,84:611,85:722,86:667,87:944,88:667,89:667,90:611,91:278,92:278,93:278,94:469,95:556,96:333,
+    97:556,98:556,99:500,100:556,101:556,102:278,103:556,104:556,105:222,106:222,107:500,108:222,109:833,110:556,111:556,
+    112:556,113:556,114:333,115:500,116:278,117:556,118:500,119:722,120:500,121:500,122:500,123:334,124:260,125:334,126:584};
+  for(const k in asc) w[k]=asc[k];
+  const hi={128:556,145:222,146:222,147:333,148:333,149:350,150:556,151:1000,167:556,169:737,171:556,176:400,183:278,187:556,
+    191:611,192:667,193:667,194:667,195:667,196:667,197:667,198:1000,199:722,200:667,201:667,202:667,203:667,
+    204:278,205:278,206:278,207:278,209:722,210:778,211:778,212:778,213:778,214:778,215:584,216:778,217:722,218:722,219:722,220:722,
+    221:667,223:611,224:556,225:556,226:556,227:556,228:556,229:556,230:889,231:500,232:556,233:556,234:556,235:556,
+    236:278,237:278,238:278,239:278,241:556,242:556,243:556,244:556,245:556,246:556,247:584,248:611,249:556,250:556,251:556,252:556,255:500};
+  for(const k in hi) w[k]=hi[k];
+  return w;
+})();
+function textWidth(str, size){
+  const bytes=toWinAnsi(str); let u=0;
+  for(let i=0;i<bytes.length;i++) u+=HELV_W[bytes[i]];
+  return u/1000*size;
+}
+function wrapText(str, size, maxW){
+  const lines=[];
+  const paragraphs=String(str).split(/\r?\n/);
+  for(const para of paragraphs){
+    if(para===""){ lines.push(""); continue; }
+    const words=para.split(/\s+/); let cur="";
+    for(let word of words){
+      while(textWidth(word,size)>maxW){
+        let cut=word.length;
+        while(cut>1 && textWidth(word.slice(0,cut),size)>maxW) cut--;
+        const head=word.slice(0,cut);
+        if(cur){ lines.push(cur); cur=""; }
+        lines.push(head); word=word.slice(cut);
+      }
+      const trial = cur? cur+" "+word : word;
+      if(textWidth(trial,size)>maxW && cur){ lines.push(cur); cur=word; }
+      else cur=trial;
+    }
+    lines.push(cur);
+  }
+  return lines;
+}
+function pdfEscape(str){ return str.replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)"); }
+function latinStrToBytes(s){ const o=new Uint8Array(s.length); for(let i=0;i<s.length;i++) o[i]=s.charCodeAt(i)&255; return o; }
+function bytesToLatinStr(bytes){ let s=""; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return s; }
+
+// blocks: [{text, size, gap, indent}] oder {rule:true} -> passwortgeschütztes PDF (Uint8Array)
+function buildPdf(blocks, meta, userPassword){
+  const PW=595.28, PH=841.89, MX=56, MTOP=64, MBOT=56;
+  const contentW=PW-2*MX;
+  const pages=[]; let cur=[]; let y=PH-MTOP;
+  const pushPage=()=>{ pages.push(cur); cur=[]; y=PH-MTOP; };
+  for(const blk of blocks){
+    const size=blk.size||11, gap=(blk.gap!=null?blk.gap:4), indent=blk.indent||0;
+    const lh=size*1.35;
+    const wrapped = blk.rule ? [" RULE"] : wrapText(blk.text!=null?blk.text:"", size, contentW-indent);
+    for(const ln of wrapped){
+      if(y-lh<MBOT) pushPage();
+      cur.push({x:MX+indent, y:y-size, size, text:ln});
+      y-=lh;
+    }
+    y-=gap;
+  }
+  if(cur.length||pages.length===0) pushPage();
+
+  const P=pages.length;
+  const OBJ={ catalog:1, pages:2, font:3 };
+  const pageObj=(i)=>4+i;
+  const contObj=(i)=>4+P+i;
+  OBJ.info=4+2*P; OBJ.encrypt=5+2*P;
+  const N=5+2*P;
+
+  const PAD=new Uint8Array([0x28,0xBF,0x4E,0x5E,0x4E,0x75,0x8A,0x41,0x64,0x00,0x4E,0x56,0xFF,0xFA,0x01,0x08,
+    0x2E,0x2E,0x00,0xB6,0xD0,0x68,0x3E,0x80,0x2F,0x0C,0xA9,0xFE,0x64,0x53,0x69,0x7A]);
+  const padPw=(pwBytes)=>{ const o=new Uint8Array(32); const k=Math.min(pwBytes.length,32); o.set(pwBytes.subarray(0,k)); o.set(PAD.subarray(0,32-k),k); return o; };
+  const userPad=padPw(toWinAnsi(userPassword||""));
+  const ownerPad=userPad;
+  const P_PERM=-4;
+  const idBytes=crypto.getRandomValues(new Uint8Array(16));
+  const oKey=md5(ownerPad).subarray(0,5);
+  const O=rc4(oKey, userPad);
+  const keyInput=new Uint8Array(32+32+4+idBytes.length);
+  keyInput.set(userPad,0); keyInput.set(O,32);
+  keyInput[64]=P_PERM&255; keyInput[65]=(P_PERM>>>8)&255; keyInput[66]=(P_PERM>>>16)&255; keyInput[67]=(P_PERM>>>24)&255;
+  keyInput.set(idBytes,68);
+  const encKey=md5(keyInput).subarray(0,5);
+  const U=rc4(encKey, PAD);
+  const objKey=(num)=>{ const b=new Uint8Array(encKey.length+5); b.set(encKey,0);
+    b[encKey.length]=num&255; b[encKey.length+1]=(num>>>8)&255; b[encKey.length+2]=(num>>>16)&255;
+    b[encKey.length+3]=0; b[encKey.length+4]=0;
+    return md5(b).subarray(0, Math.min(encKey.length+5,16)); };
+  const encStr=(num, bytes)=>rc4(objKey(num), bytes);
+  const hex=(bytes)=>{ let s=""; for(let i=0;i<bytes.length;i++) s+=bytes[i].toString(16).padStart(2,"0"); return s; };
+
+  const chunks=[]; let len=0;
+  const offsets=new Array(N+1).fill(0);
+  const pushBytes=(bytes)=>{ chunks.push(bytes); len+=bytes.length; };
+  const pushStr=(s)=>pushBytes(new Uint8Array([...s].map(c=>c.charCodeAt(0)&255)));
+  const startObj=(num)=>{ offsets[num]=len; pushStr(num+" 0 obj\n"); };
+  const endObj=()=>pushStr("endobj\n");
+
+  pushStr("%PDF-1.4\n%âãÏÓ\n");
+  startObj(OBJ.catalog); pushStr("<< /Type /Catalog /Pages "+OBJ.pages+" 0 R >>\n"); endObj();
+  let kids=""; for(let i=0;i<P;i++) kids+=pageObj(i)+" 0 R ";
+  startObj(OBJ.pages); pushStr("<< /Type /Pages /Kids ["+kids+"] /Count "+P+" >>\n"); endObj();
+  startObj(OBJ.font); pushStr("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\n"); endObj();
+  for(let i=0;i<P;i++){
+    startObj(pageObj(i));
+    pushStr("<< /Type /Page /Parent "+OBJ.pages+" 0 R /MediaBox [0 0 "+PW.toFixed(2)+" "+PH.toFixed(2)+"] "+
+            "/Resources << /Font << /F1 "+OBJ.font+" 0 R >> >> /Contents "+contObj(i)+" 0 R >>\n");
+    endObj();
+  }
+  for(let i=0;i<P;i++){
+    let cs="BT\n"; let lastSize=null;
+    for(const it of pages[i]){
+      if(it.text===" RULE"){
+        cs+="ET\n0.835 0.867 0.820 RG 1 w "+MX.toFixed(2)+" "+(it.y+it.size*0.5).toFixed(2)+" m "+
+            (PW-MX).toFixed(2)+" "+(it.y+it.size*0.5).toFixed(2)+" l S\nBT\n";
+        continue;
+      }
+      if(it.size!==lastSize){ cs+="/F1 "+it.size+" Tf\n"; lastSize=it.size; }
+      cs+="1 0 0 1 "+it.x.toFixed(2)+" "+it.y.toFixed(2)+" Tm ("+pdfEscape(bytesToLatinStr(toWinAnsi(it.text)))+") Tj\n";
+    }
+    cs+="ET";
+    // cs enthält nur ASCII-Operatoren + bereits WinAnsi-kodierte Textbytes (je 1 Zeichen = 1 Byte)
+    const enc=encStr(contObj(i), latinStrToBytes(cs));
+    startObj(contObj(i));
+    pushStr("<< /Length "+enc.length+" >>\nstream\n");
+    pushBytes(enc); pushStr("\nendstream\n"); endObj();
+  }
+  {
+    const title=encStr(OBJ.info, toWinAnsi(meta.title||"Protokoll"));
+    const prod=encStr(OBJ.info, toWinAnsi("Therapie-Protokoll-App"));
+    startObj(OBJ.info);
+    pushStr("<< /Title <"+hex(title)+"> /Producer <"+hex(prod)+"> /Creator <"+hex(prod)+"> >>\n");
+    endObj();
+  }
+  startObj(OBJ.encrypt);
+  pushStr("<< /Filter /Standard /V 1 /R 2 /O <"+hex(O)+"> /U <"+hex(U)+"> /P "+P_PERM+" >>\n");
+  endObj();
+
+  const xrefStart=len;
+  pushStr("xref\n0 "+(N+1)+"\n");
+  pushStr("0000000000 65535 f \n");
+  for(let i=1;i<=N;i++) pushStr(String(offsets[i]).padStart(10,"0")+" 00000 n \n");
+  const idHex=hex(idBytes);
+  pushStr("trailer\n<< /Size "+(N+1)+" /Root "+OBJ.catalog+" 0 R /Info "+OBJ.info+" 0 R "+
+          "/Encrypt "+OBJ.encrypt+" 0 R /ID [<"+idHex+"> <"+idHex+">] >>\n");
+  pushStr("startxref\n"+xrefStart+"\n%%EOF\n");
+
+  const out=new Uint8Array(len); let p=0;
+  for(const c of chunks){ out.set(c,p); p+=c.length; }
+  return out;
+}
+
+/* =========================================================================
+   6. i18n — Oberflächentexte   [IDENTISCH in index.html und admin.html]
+   ========================================================================= */
+const I18N = {
+  de:{
+    appName:"Therapie-Protokoll",
+    langLabel:"Sprache",
+    chooseRole:"Willkommen", chooseRoleSub:"Wie möchten Sie die App nutzen?",
+    rolePatient:"Ich führe Protokolle", rolePatientSub:"Patient:innen-Modus – protokollieren und exportieren",
+    roleTherapist:"Ich verwalte Vorlagen", roleTherapistSub:"Therapeut:innen-Modus – Vorlagen bearbeiten und teilen",
+    back:"Zurück", next:"Weiter", cancel:"Abbrechen", save:"Speichern", delete:"Löschen",
+    confirm:"Übernehmen", edit:"Bearbeiten", duplicate:"Duplizieren", rename:"Umbenennen", add:"Hinzufügen", done:"Fertig",
+    insecureTitle:"Sicherer Kontext erforderlich",
+    insecureBody:"Diese App verschlüsselt Ihre Daten mit der eingebauten Browser-Verschlüsselung. Diese ist nur über HTTPS oder localhost verfügbar. Über eine direkt geöffnete Datei (file://) oder unverschlüsseltes HTTP funktioniert das nicht.",
+    insecureHow:"Bitte öffnen Sie die App über eine HTTPS-Adresse oder über http://localhost.",
+    installTitle:"Zuerst zum Home-Bildschirm hinzufügen",
+    installBody:"Damit Ihre Einträge sicher gespeichert bleiben, fügen Sie die App zuerst zum Home-Bildschirm hinzu und richten dann alles über das neue Symbol ein.",
+    installWhy:"Wichtig: Legen Sie PIN und Einträge erst an, nachdem Sie die App über das Home-Symbol geöffnet haben. Sonst können die Daten später verloren gehen – besonders auf dem iPhone speichert die App über das Home-Symbol getrennt vom Browser.",
+    installReopen:"Öffnen Sie die App danach über das neue Symbol auf dem Home-Bildschirm und fahren dort fort.",
+    installDetected:"Ein Vorlagen-Link wurde erkannt. Er wird übernommen, sobald Sie fortfahren.",
+    installContinue:"Weiter im Browser (z. B. am Computer)",
+    ob1Title:"Ihre Daten bleiben bei Ihnen",
+    ob1Body:"Alles, was Sie hier eintragen, bleibt lokal auf diesem Gerät. Die App sendet von sich aus nichts ins Internet – kein Konto, kein Server, kein Mitlesen. Ihre Therapeutin bekommt nur das, was Sie ihr selbst als PDF schicken.",
+    ob2Title:"Wichtig: kein Notfallkanal",
+    ob2Body:"Diese App wird nicht überwacht. Niemand liest hier mit oder reagiert auf Einträge. Wenn es Ihnen akut schlecht geht oder Sie in einer Krise sind, wenden Sie sich bitte sofort an:",
+    ob3Title:"Bitte gut merken",
+    ob3Body:"Ihre Daten liegen nur auf diesem Gerät und sind mit Ihrer PIN verschlüsselt. Es gibt kein Backup und kein Zurücksetzen: Wenn Sie die PIN vergessen oder das Gerät verloren geht oder kaputt ist, sind die Einträge unwiederbringlich weg.",
+    ob3Safety:"Ihr Sicherheitsnetz: die App zum Home-Bildschirm hinzufügen und regelmäßig ein PDF an Ihre Therapeutin schicken.",
+    ob4Title:"Zum Home-Bildschirm hinzufügen",
+    ob4Body:"Das schützt Ihre gespeicherten Daten – besonders auf dem iPhone, wo der Browser Daten sonst nach etwa 7 Tagen ohne Nutzung löschen kann.",
+    ob4iOS:"iPhone (Safari): unten auf das Teilen-Symbol tippen, dann „Zum Home-Bildschirm“.",
+    ob4Android:"Android (Chrome): oben rechts auf das Menü (drei Punkte), dann „Zum Startbildschirm hinzufügen“.",
+    ob4Note:"Sie können das jetzt oder später machen. Der Punkt ist immer über „Einstellungen“ erreichbar.",
+    obIntroTitle:"So tragen Sie ein",
+    obIntroBody:"Tragen Sie ein, was gerade stimmt, so ehrlich und unkompliziert wie möglich. Es muss nicht perfekt oder vollständig sein. Falls Ihnen später ein Fehler auffällt, können Sie einen Eintrag noch ändern.",
+    ob5Title:"PIN festlegen",
+    ob5Body:"Mit dieser PIN entsperren Sie die App und verschlüsseln Ihre Einträge. Wählen Sie etwas, das Sie sich gut merken und das nicht leicht zu erraten ist. Geben Sie die PIN niemandem weiter – auch nicht Ihrer Therapeutin.",
+    ob5Warn:"Es gibt kein Zurücksetzen und kein Backup: Wenn Sie die PIN vergessen oder das Gerät verlieren, sind die Einträge weg. Ihr Sicherheitsnetz: regelmäßig ein PDF an Ihre Therapeutin senden.",
+    pinLabel:"PIN (mindestens 4 Zeichen)", pinRepeat:"PIN wiederholen",
+    pinMismatch:"Die beiden Eingaben stimmen nicht überein.",
+    pinTooShort:"Bitte mindestens 4 Zeichen.",
+    startProtocol:"Los geht’s",
+    unlockTitle:"App entsperren", unlockBody:"Bitte geben Sie Ihre PIN ein.",
+    unlock:"Entsperren", unlockWrong:"Falsche PIN. Ihre Daten bleiben verschlüsselt.",
+    patientHome:"Meine Protokolle", noActiveTpl:"Noch keine aktive Vorlage.",
+    noActiveTplBody:"Öffnen Sie einen Vorlagen-Link Ihrer Therapeutin. Danach können Sie hier protokollieren.",
+    chooseActiveTpl:"Vorlage auswählen", activeTpl:"Aktive Vorlage", changeTpl:"Vorlage wechseln",
+    newEntry:"Neuer Eintrag", entries:"Einträge", noEntries:"Noch keine Einträge. Wenn Sie mögen, legen Sie Ihren ersten an.",
+    resumeDraft:"Entwurf fortsetzen", draftPresent:"Sie haben einen unfertigen Eintrag.",
+    exportPdf:"Als PDF exportieren", addReminder:"Kalender-Erinnerung", settings:"Einstellungen",
+    switchToTherapist:"Zu Vorlagen (Therapeut:in)", switchToPatient:"Zu meinen Protokollen",
+    entryTime:"Zeitpunkt", required:"Pflichtfeld", saveEntry:"Eintrag speichern",
+    fillRequired:"Bitte füllen Sie die Pflichtfelder aus.", entrySaved:"Eintrag gespeichert.",
+    deleteEntryQ:"Diesen Eintrag wirklich löschen?", yes:"Ja", no:"Nein",
+    setName:"Name (erscheint im PDF-Kopf)", setNameHint:"Voller Name, so wie ihn Ihre Therapeutin zuordnen kann.",
+    setPdfPw:"PDF-Passwort", setPdfPwHint:"Schützt exportierte PDFs. Vereinbaren Sie es mündlich mit Ihrer Therapeutin. Es muss sich von Ihrer App-PIN unterscheiden.",
+    pdfPwEqualsPin:"Das PDF-Passwort darf nicht mit Ihrer App-PIN identisch sein. Bitte wählen Sie ein anderes.",
+    pdfPwSaved:"Gespeichert.", crisisNumbers:"Notfallnummern", homeScreenHelp:"Zum Home-Bildschirm hinzufügen",
+    dangerZone:"Alles zurücksetzen", dangerBody:"Löscht alle Einträge, die Vorlage und Einstellungen auf diesem Gerät. Unwiderruflich, kein Backup.",
+    resetConfirm:"Wirklich alles unwiderruflich löschen?", resetDone:"Alles gelöscht.",
+    exportTitle:"PDF-Export", exportNoName:"Bitte tragen Sie zuerst in den Einstellungen Ihren Namen ein.",
+    exportNoPw:"Bitte legen Sie zuerst in den Einstellungen ein PDF-Passwort fest.",
+    exportNoEntries:"Es gibt noch keine Einträge zum Exportieren.",
+    exportRange:"Zeitraum", exportAll:"Alle Einträge", exportGenerate:"PDF erstellen",
+    exportReady:"PDF erstellt und passwortgeschützt.", exportShare:"Teilen / Speichern",
+    from:"von", to:"bis",
+    reminderTitle:"Kalender-Erinnerung", reminderNone:"Für diese Vorlage ist keine Erinnerungszeit hinterlegt.",
+    reminderBody:"Es wird ein Kalendereintrag erstellt (.ics), den Ihr Systemkalender öffnet. Die Erinnerung läuft danach im Kalender – sie öffnet den Kalender, nicht automatisch die App (der Link steht im Termin).",
+    reminderTime:"Uhrzeit", reminderFreq:"Wiederholung",
+    freqDAILY:"Täglich", freqWEEKLY:"Wöchentlich", freqNONE:"Einmalig",
+    reminderDownload:"Kalendereintrag hinzufügen", reminderOverrideHint:"Sie können die Zeit für sich anpassen.",
+    reminderIosHint:"Tipp fürs iPhone: Nach dem Antippen öffnet sich eine Termin-Vorschau – dort auf „Hinzufügen“ tippen, um ihn in den Kalender zu übernehmen.",
+    tplLibrary:"Vorlagen-Bibliothek", tplLibrarySub:"Presets sind editierbar. Änderungen bleiben dauerhaft. Für Einzelfälle duplizieren.",
+    newFromScratch:"Neue leere Vorlage", shareTpl:"Teilen (Link)", useAsActive:"Als aktive Vorlage nutzen",
+    editTplTitle:"Vorlage bearbeiten", tplName:"Name der Vorlage", tplNameEn:"Name (Englisch, optional)",
+    reminderConfig:"Erinnerung (für Patient:in vorbelegt)", reminderEnable:"Erinnerung aktivieren",
+    patientCanOverride:"Patient:in darf die Zeit anpassen",
+    fields:"Felder", addField:"Feld hinzufügen", noFields:"Noch keine Felder. Fügen Sie das erste hinzu.",
+    fType:"Typ", fLabel:"Beschriftung (Deutsch)", fLabelEn:"Beschriftung (Englisch, optional)",
+    fRequired:"Pflichtfeld", fOptions:"Optionen", fOptDe:"Option (Deutsch)", fOptEn:"Englisch (optional)",
+    addOption:"Option hinzufügen", scaleMin:"Minimum", scaleMax:"Maximum",
+    scaleMinLabel:"Beschriftung Minimum (optional)", scaleMaxLabel:"Beschriftung Maximum (optional)",
+    moveUp:"Nach oben", moveDown:"Nach unten", removeField:"Feld entfernen",
+    tplNameRequired:"Bitte geben Sie der Vorlage einen Namen.",
+    t_shorttext:"Kurztext", t_longtext:"Langtext", t_scale:"Skala", t_single:"Einfachauswahl",
+    t_multi:"Mehrfachauswahl", t_yesno:"Ja/Nein", t_number:"Zahl", t_datetime:"Datum/Uhrzeit",
+    shareTitle:"Vorlage teilen", shareBody:"Kopieren Sie diesen Link und geben Sie ihn der patientenführenden Person weiter. Die Vorlage steckt vollständig im Link – ganz ohne Server.",
+    copyLink:"Link kopieren", copied:"Kopiert.", copyFail:"Kopieren nicht möglich – bitte manuell markieren.",
+    importTitle:"Vorlage übernehmen?", importBody:"Sie haben einen Vorlagen-Link geöffnet. Möchten Sie diese Vorlage auf diesem Gerät übernehmen?",
+    importDo:"Übernehmen", importSetActive:"Übernehmen und als aktiv setzen", importBad:"Der Link konnte nicht gelesen werden.",
+    imported:"Vorlage übernommen.",
+    yesLabel:"Ja", noLabel:"Nein", optional:"optional", toastCopied:"Kopiert.",
+    confirmDeleteTpl:"Diese Vorlage wirklich löschen?", renamePrompt:"Neuer Name:",
+    fieldsWord:"Felder",
+    entryCount:(n)=>n===1?"1 Eintrag":n+" Einträge",
+    adminTitle:"Vorlagen-Verwaltung", adminSub:"Geschützter Bereich für die therapeutische Praxis.",
+    adminPwLabel:"Passwort", adminPwWrong:"Falsches Passwort.", adminUnlock:"Öffnen",
+    adminLock:"Sperren",
+  },
+  en:{
+    appName:"Therapy Log",
+    langLabel:"Language",
+    chooseRole:"Welcome", chooseRoleSub:"How would you like to use the app?",
+    rolePatient:"I keep logs", rolePatientSub:"Patient mode – record entries and export",
+    roleTherapist:"I manage templates", roleTherapistSub:"Therapist mode – edit and share templates",
+    back:"Back", next:"Next", cancel:"Cancel", save:"Save", delete:"Delete",
+    confirm:"Apply", edit:"Edit", duplicate:"Duplicate", rename:"Rename", add:"Add", done:"Done",
+    insecureTitle:"Secure context required",
+    insecureBody:"This app encrypts your data using the browser’s built-in encryption. That is only available over HTTPS or localhost. It does not work from a file opened directly (file://) or over plain HTTP.",
+    insecureHow:"Please open the app via an HTTPS address or via http://localhost.",
+    installTitle:"Add to home screen first",
+    installBody:"So your entries stay safely stored, add the app to your home screen first and then set everything up via the new icon.",
+    installWhy:"Important: create your PIN and entries only after opening the app from the home-screen icon. Otherwise the data can be lost later – on iPhone in particular, the home-screen app stores data separately from the browser.",
+    installReopen:"Then open the app via the new icon on your home screen and continue there.",
+    installDetected:"A template link was detected. It will be applied once you continue.",
+    installContinue:"Continue in the browser (e.g. on a computer)",
+    ob5Warn:"There is no reset and no backup: if you forget the PIN or lose the device, the entries are gone. Your safety net: regularly send a PDF to your therapist.",
+    reminderIosHint:"Tip for iPhone: after tapping, an event preview appears – tap “Add” there to save it to your calendar.",
+    ob1Title:"Your data stays with you",
+    ob1Body:"Everything you enter here stays locally on this device. The app sends nothing to the internet on its own – no account, no server, no one reading along. Your therapist only receives what you send them yourself as a PDF.",
+    ob2Title:"Important: not an emergency channel",
+    ob2Body:"This app is not monitored. No one reads along or reacts to entries. If you feel acutely unwell or are in a crisis, please reach out right away:",
+    ob3Title:"Please remember well",
+    ob3Body:"Your data lives only on this device and is encrypted with your PIN. There is no backup and no reset: if you forget the PIN or lose or break the device, the entries are gone for good.",
+    ob3Safety:"Your safety net: add the app to your home screen and regularly send a PDF to your therapist.",
+    ob4Title:"Add to home screen",
+    ob4Body:"This protects your stored data – especially on iPhone, where the browser may otherwise delete data after about 7 days of no use.",
+    ob4iOS:"iPhone (Safari): tap the share icon at the bottom, then “Add to Home Screen”.",
+    ob4Android:"Android (Chrome): tap the menu (three dots) at the top right, then “Add to Home screen”.",
+    ob4Note:"You can do this now or later. The option is always available under “Settings”.",
+    obIntroTitle:"How to log",
+    obIntroBody:"Write down what’s true right now, as honestly and simply as you can. It doesn’t have to be perfect or complete. If you got something wrong, you can still change an entry later.",
+    ob5Title:"Set a PIN",
+    ob5Body:"You use this PIN to unlock the app and encrypt your entries. Choose something you can remember well and that is not easy to guess. Never share the PIN with anyone – not even your therapist.",
+    pinLabel:"PIN (at least 4 characters)", pinRepeat:"Repeat PIN",
+    pinMismatch:"The two entries do not match.",
+    pinTooShort:"Please use at least 4 characters.",
+    startProtocol:"Get started",
+    unlockTitle:"Unlock app", unlockBody:"Please enter your PIN.",
+    unlock:"Unlock", unlockWrong:"Wrong PIN. Your data stays encrypted.",
+    patientHome:"My logs", noActiveTpl:"No active template yet.",
+    noActiveTplBody:"Open a template link from your therapist. Then you can log here.",
+    chooseActiveTpl:"Choose template", activeTpl:"Active template", changeTpl:"Change template",
+    newEntry:"New entry", entries:"Entries", noEntries:"No entries yet. If you like, create your first one.",
+    resumeDraft:"Resume draft", draftPresent:"You have an unfinished entry.",
+    exportPdf:"Export as PDF", addReminder:"Calendar reminder", settings:"Settings",
+    switchToTherapist:"To templates (therapist)", switchToPatient:"To my logs",
+    entryTime:"Time", required:"required", saveEntry:"Save entry",
+    fillRequired:"Please fill in the required fields.", entrySaved:"Entry saved.",
+    deleteEntryQ:"Really delete this entry?", yes:"Yes", no:"No",
+    setName:"Name (appears in the PDF header)", setNameHint:"Full name, as your therapist can identify it.",
+    setPdfPw:"PDF password", setPdfPwHint:"Protects exported PDFs. Agree on it verbally with your therapist. It must differ from your app PIN.",
+    pdfPwEqualsPin:"The PDF password must not be identical to your app PIN. Please choose a different one.",
+    pdfPwSaved:"Saved.", crisisNumbers:"Emergency numbers", homeScreenHelp:"Add to home screen",
+    dangerZone:"Reset everything", dangerBody:"Deletes all entries, the template and settings on this device. Irreversible, no backup.",
+    resetConfirm:"Really delete everything irreversibly?", resetDone:"Everything deleted.",
+    exportTitle:"PDF export", exportNoName:"Please enter your name in settings first.",
+    exportNoPw:"Please set a PDF password in settings first.",
+    exportNoEntries:"There are no entries to export yet.",
+    exportRange:"Range", exportAll:"All entries", exportGenerate:"Create PDF",
+    exportReady:"PDF created and password-protected.", exportShare:"Share / Save",
+    from:"from", to:"to",
+    reminderTitle:"Calendar reminder", reminderNone:"No reminder time is set for this template.",
+    reminderBody:"A calendar entry (.ics) is created that your system calendar opens. The reminder then runs in the calendar – it opens the calendar, not the app automatically (the link is in the event).",
+    reminderTime:"Time", reminderFreq:"Repeat",
+    freqDAILY:"Daily", freqWEEKLY:"Weekly", freqNONE:"Once",
+    reminderDownload:"Add calendar entry", reminderOverrideHint:"You can adjust the time for yourself.",
+    tplLibrary:"Template library", tplLibrarySub:"Presets are editable. Changes are kept permanently. Duplicate for individual cases.",
+    newFromScratch:"New empty template", shareTpl:"Share (link)", useAsActive:"Use as active template",
+    editTplTitle:"Edit template", tplName:"Template name", tplNameEn:"Name (English, optional)",
+    reminderConfig:"Reminder (pre-set for patient)", reminderEnable:"Enable reminder",
+    patientCanOverride:"Patient may adjust the time",
+    fields:"Fields", addField:"Add field", noFields:"No fields yet. Add the first one.",
+    fType:"Type", fLabel:"Label (German)", fLabelEn:"Label (English, optional)",
+    fRequired:"Required", fOptions:"Options", fOptDe:"Option (German)", fOptEn:"English (optional)",
+    addOption:"Add option", scaleMin:"Minimum", scaleMax:"Maximum",
+    scaleMinLabel:"Minimum label (optional)", scaleMaxLabel:"Maximum label (optional)",
+    moveUp:"Move up", moveDown:"Move down", removeField:"Remove field",
+    tplNameRequired:"Please give the template a name.",
+    t_shorttext:"Short text", t_longtext:"Long text", t_scale:"Scale", t_single:"Single choice",
+    t_multi:"Multiple choice", t_yesno:"Yes/No", t_number:"Number", t_datetime:"Date/Time",
+    shareTitle:"Share template", shareBody:"Copy this link and give it to the person keeping the logs. The template is fully contained in the link – with no server.",
+    copyLink:"Copy link", copied:"Copied.", copyFail:"Copy failed – please select manually.",
+    importTitle:"Adopt template?", importBody:"You opened a template link. Would you like to adopt this template on this device?",
+    importDo:"Adopt", importSetActive:"Adopt and set active", importBad:"The link could not be read.",
+    imported:"Template adopted.",
+    yesLabel:"Yes", noLabel:"No", optional:"optional", toastCopied:"Copied.",
+    confirmDeleteTpl:"Really delete this template?", renamePrompt:"New name:",
+    fieldsWord:"fields",
+    entryCount:(n)=>n===1?"1 entry":n+" entries",
+    adminTitle:"Template management", adminSub:"Protected area for the therapy practice.",
+    adminPwLabel:"Password", adminPwWrong:"Wrong password.", adminUnlock:"Open",
+    adminLock:"Lock",
+  }
+};
+let LANG = (LS.get(LS_KEYS.prefs) && JSON.parse(LS.get(LS_KEYS.prefs)).lang) || "de";
+function t(key, ...args){ const v=I18N[LANG][key]; return typeof v==="function"? v(...args) : (v!==undefined?v:key); }
+function setLang(l){ LANG=l; const p=JSON.parse(LS.get(LS_KEYS.prefs)||"{}"); p.lang=l; LS.set(LS_KEYS.prefs, JSON.stringify(p)); render(); }
+document.documentElement.lang=LANG;
+
+/* =========================================================================
+   7. Feld-Inhalte: Zweisprachigkeit mit Fallback   [IDENTISCH in beiden Dateien]
+   ========================================================================= */
+function loc(de, en){ if(LANG==="en"){ return (en&&en.trim())? en : (de||""); } return de||""; }
+function fieldLabel(f){ return loc(f.label, f.labelEn); }
+function optLabel(o){ return loc(o.de, o.en); }
+function tplName(tpl){ return loc(tpl.name, tpl.nameEn); }
+
+/* =========================================================================
+   8. Template-Datenmodell (Feldtypen)   [IDENTISCH in index.html und admin.html]
+   Hinweis: Die Patienten-App legt selbst KEINE Templates an. Sie liest die vom
+   Therapeutinnen-Link mitgebrachte Struktur nur aus. Deshalb hier bewusst KEIN
+   Editor, kein Preset-Katalog und keine Bearbeitungsfunktion.
+   ========================================================================= */
+const FIELD_TYPES=["shorttext","longtext","scale","single","multi","yesno","number","datetime"];
+let __idc = 0;
+function uid(prefix){ __idc++; return (prefix||"id")+"_"+Date.now().toString(36)+"_"+__idc.toString(36); }
+
+/* =========================================================================
+   9. Datenzugriff: empfangene Templates (Klartext) + Vault (verschlüsselt)
+   ========================================================================= */
+function loadTemplates(){
+  const raw=LS.get(LS_KEYS.templates);
+  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
+  return []; // Patienten-App startet ohne Vorlagen; sie kommen nur über den Teilen-Link
+}
+function saveTemplates(tpls){ LS.set(LS_KEYS.templates, JSON.stringify(tpls)); }
+
+function loadMeta(){ const r=LS.get(LS_KEYS.meta); return r? JSON.parse(r) : null; }
+function saveMeta(m){ LS.set(LS_KEYS.meta, JSON.stringify(m)); }
+
+const APP = {
+  key:null, vault:null, templates:[],
+  screen:"boot",
+  editingEntryId:null, __fromDraft:false,
+  pendingImport:null, pendingImportSig:null,
+  onboardStep:0,
+  msg:null
+};
+// Läuft die App als installierte Home-Bildschirm-App (iOS/Android) statt im Browser-Tab?
+function isStandalone(){
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true;
+}
+function isIOS(){
+  return /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+}
+// Bereits übernommene Vorlagen-Links merken, damit ein Home-Bildschirm-Shortcut mit #tpl=
+// nicht bei jedem Öffnen erneut den Übernahme-Dialog zeigt.
+function importedSigs(){ try{ return JSON.parse(LS.get("tp_imported_sigs")||"[]"); }catch(e){ return []; } }
+function addImportedSig(sig){ if(!sig) return; const a=importedSigs(); if(!a.includes(sig)){ a.push(sig); LS.set("tp_imported_sigs", JSON.stringify(a)); } }
+function emptyVault(){ return { settings:{ patientName:"", pdfPassword:"" }, activeTemplateId:null, entries:[], draft:null, reminderOverride:{} }; }
+async function saveVault(){ if(!APP.key||!APP.vault) return; const enc=await encryptJSON(APP.key, APP.vault); LS.set(LS_KEYS.vault, enc); }
+
+/* =========================================================================
+   10. DOM-Helfer (sicher: Text via textContent)
+   ========================================================================= */
+function h(tag, props, ...kids){
+  const e=document.createElement(tag);
+  if(props){
+    for(const k in props){
+      const v=props[k];
+      if(v==null||v===false) continue;
+      if(k==="class") e.className=v;
+      else if(k==="text") e.textContent=v;
+      else if(k==="html") e.innerHTML=v;
+      else if(k.slice(0,2)==="on" && typeof v==="function") e.addEventListener(k.slice(2), v);
+      else if(k==="value") e.value=v;
+      else if(k==="checked") e.checked=!!v;
+      else e.setAttribute(k, v);
+    }
+  }
+  for(const kid of kids.flat()){
+    if(kid==null||kid===false) continue;
+    e.appendChild(typeof kid==="string"? document.createTextNode(kid) : kid);
+  }
+  return e;
+}
+function clear(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+function toast(text){
+  const old=document.querySelector(".toast"); if(old) old.remove();
+  const el=h("div",{class:"toast",role:"status",text});
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 2600);
+}
+function fmtDateTime(iso){
+  const d=new Date(iso); if(isNaN(d)) return iso||"";
+  return d.toLocaleString(LANG==="en"?"en-GB":"de-DE",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+function fmtDate(iso){ const d=new Date(iso); if(isNaN(d)) return iso||""; return d.toLocaleDateString(LANG==="en"?"en-GB":"de-DE",{year:"numeric",month:"2-digit",day:"2-digit"}); }
+function localDatetimeValue(d){
+  const p=(n)=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes());
+}
+
+/* =========================================================================
+   11. Kopf / Sprache-Umschalter
+   ========================================================================= */
+function leafSvg(){
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");
+  svg.setAttribute("class","leaf"); svg.setAttribute("viewBox","0 0 24 24"); svg.setAttribute("aria-hidden","true");
+  const p=document.createElementNS(NS,"path");
+  p.setAttribute("d","M12 21c-4-1-7-4-7-9 0-4 3-8 9-9 0 6-2 9-6 11 4 0 8-3 10-8 0 8-3 14-6 15z");
+  p.setAttribute("fill","var(--sage)");
+  svg.appendChild(p); return svg;
+}
+function topbar(showLang){
+  const bar=h("div",{class:"topbar"},
+    h("div",{class:"brand"}, leafSvg(), h("span",{text:t("appName")}))
+  );
+  if(showLang!==false){
+    const tg=h("div",{class:"langtoggle",role:"group","aria-label":t("langLabel")},
+      h("button",{class:LANG==="de"?"on":"", onclick:()=>setLang("de"), "aria-pressed":LANG==="de"}, "DE"),
+      h("button",{class:LANG==="en"?"on":"", onclick:()=>setLang("en"), "aria-pressed":LANG==="en"}, "EN")
+    );
+    bar.appendChild(tg);
+  }
+  return bar;
+}
+
+/* =========================================================================
+   12. Screens
+   ========================================================================= */
+const app = ()=>document.getElementById("app");
+function mount(...nodes){ const a=app(); clear(a); const s=h("div",{class:"screen"}, ...nodes); a.appendChild(s); window.scrollTo(0,0); }
+
+function screenInsecure(){
+  mount(
+    topbar(),
+    h("div",{class:"card stack"},
+      h("h1",{text:t("insecureTitle")}),
+      h("p",{class:"muted",text:t("insecureBody")}),
+      h("div",{class:"notice warn"}, h("p",{text:t("insecureHow")}))
+    )
+  );
+}
+
+/* --- Home-Bildschirm-Gate: kommt VOR dem Onboarding, wenn die App im Browser
+   (nicht als installierte Home-App) und noch ohne Vault läuft. Grund: auf dem iPhone
+   hat die Home-App einen eigenen Speicher – Einrichtung muss dort passieren, sonst
+   gehen PIN/Einträge beim späteren Hinzufügen verloren. --- */
+function screenInstall(){
+  mount(
+    topbar(),
+    h("div",{class:"card stack"},
+      h("h1",{text:t("installTitle")}),
+      h("p",{text:t("installBody")}),
+      APP.pendingImport? h("div",{class:"notice"}, h("p",{style:"margin:0",text:t("installDetected")})):null,
+      h("div",{class:"card stack", style:"margin:0"},
+        h("p",{style:"margin:0",text:t("ob4iOS")}),
+        h("hr",{class:"divider"}),
+        h("p",{style:"margin:0",text:t("ob4Android")})
+      ),
+      h("div",{class:"notice warn"}, h("p",{style:"margin:0",text:t("installWhy")})),
+      h("p",{class:"small muted",text:t("installReopen")}),
+      h("button",{class:"btn ghost block", onclick:()=>routeStart()}, t("installContinue"))
+    )
+  );
+}
+
+/* --- Onboarding (4 Schritte). Home-Bildschirm ist der vorgelagerte Gate-Screen;
+   der Datenverlust-/PIN-Hinweis steht direkt beim PIN-Schritt (nicht mehr doppelt). --- */
+function stepsBar(step, total){
+  const b=h("div",{class:"steps","aria-hidden":"true"});
+  for(let i=0;i<total;i++) b.appendChild(h("span",{class:i<=step?"on":""}));
+  return b;
+}
+function screenOnboarding(){
+  const step=APP.onboardStep, total=4;
+  const cont=h("div",{class:"stack"});
+  const navBack=()=>h("button",{class:"btn ghost", onclick:()=>{ APP.onboardStep--; render(); }},"‹ "+t("back"));
+  const goto=(n)=>()=>{ APP.onboardStep=n; render(); };
+
+  if(step===0){
+    cont.append(
+      h("h1",{text:t("ob1Title")}),
+      h("p",{text:t("ob1Body")}),
+      h("button",{class:"btn block", onclick:goto(1)}, t("next"))
+    );
+  } else if(step===1){
+    cont.append(
+      h("h1",{text:t("ob2Title")}),
+      h("p",{text:t("ob2Body")}),
+      h("div",{class:"notice warn stack"},
+        h("p",{style:"margin:0",text:NOTFALL.notruf}),
+        h("p",{style:"margin:0",text:NOTFALL.seelsorge}),
+        h("p",{style:"margin:0",text:NOTFALL.praxis})
+      ),
+      h("div",{class:"row",style:"margin-top:8px"}, navBack(), h("button",{class:"btn grow", onclick:goto(2)}, t("next")))
+    );
+  } else if(step===2){
+    cont.append(
+      h("h1",{text:t("obIntroTitle")}),
+      h("div",{class:"notice"}, h("p",{style:"margin:0",text:t("obIntroBody")})),
+      h("div",{class:"row",style:"margin-top:8px"}, navBack(), h("button",{class:"btn grow", onclick:goto(3)}, t("next")))
+    );
+  } else {
+    let pin="", pin2="";
+    const errEl=h("p",{class:"small",style:"color:var(--danger)"});
+    const p1=h("input",{type:"password", inputmode:"numeric", autocomplete:"new-password", "aria-label":t("pinLabel"), oninput:e=>pin=e.target.value});
+    const p2=h("input",{type:"password", inputmode:"numeric", autocomplete:"new-password", "aria-label":t("pinRepeat"), oninput:e=>pin2=e.target.value});
+    const submit=async ()=>{
+      if(pin.length<4){ errEl.textContent=t("pinTooShort"); return; }
+      if(pin!==pin2){ errEl.textContent=t("pinMismatch"); return; }
+      errEl.textContent="";
+      await createVaultWithPin(pin);
+    };
+    cont.append(
+      h("h1",{text:t("ob5Title")}),
+      h("p",{class:"muted",text:t("ob5Body")}),
+      h("div",{class:"notice warn"}, h("p",{style:"margin:0",text:t("ob5Warn")})),
+      h("div",{class:"stack"},
+        h("div",{}, h("label",{text:t("pinLabel")}), p1),
+        h("div",{}, h("label",{text:t("pinRepeat")}), p2),
+        errEl
+      ),
+      h("div",{class:"row", style:"margin-top:8px"}, navBack(), h("button",{class:"btn grow", onclick:submit}, t("startProtocol")))
+    );
+  }
+  mount(topbar(), stepsBar(step,total), h("div",{class:"card"}, cont));
+}
+
+async function createVaultWithPin(pin){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  APP.key=await deriveKey(pin, salt, KDF_ITERATIONS);
+  APP.vault=emptyVault();
+  await saveVault();
+  saveMeta({ hasVault:true, salt:bytesToB64(salt), iterations:KDF_ITERATIONS, created:new Date().toISOString() });
+  APP.screen = APP.pendingImport? "import" : "patient";
+  render();
+}
+
+/* --- Entsperren --- */
+function screenUnlock(){
+  const meta=loadMeta();
+  let pin="";
+  const errEl=h("p",{class:"small",style:"color:var(--danger)"});
+  const input=h("input",{type:"password", inputmode:"numeric", autocomplete:"current-password", "aria-label":t("pinLabel"),
+    oninput:e=>pin=e.target.value, onkeydown:e=>{ if(e.key==="Enter") submit(); }});
+  const submit=async ()=>{
+    errEl.textContent="";
+    try{
+      const salt=b64ToBytes(meta.salt);
+      const key=await deriveKey(pin, salt, meta.iterations||KDF_ITERATIONS);
+      const vault=await decryptJSON(key, LS.get(LS_KEYS.vault));
+      APP.key=key; APP.vault=vault;
+      APP.screen = APP.pendingImport? "import":"patient";
+      render();
+    }catch(e){ errEl.textContent=t("unlockWrong"); }
+  };
+  mount(
+    topbar(),
+    h("div",{class:"card stack"},
+      h("h1",{text:t("unlockTitle")}),
+      h("p",{class:"muted",text:t("unlockBody")}),
+      input, errEl,
+      h("button",{class:"btn block", onclick:submit}, t("unlock"))
+    )
+  );
+}
+
+/* --- Patienten-Home --- */
+function activeTemplate(){
+  if(!APP.vault||!APP.vault.activeTemplateId) return null;
+  return APP.templates.find(x=>x.id===APP.vault.activeTemplateId) || null;
+}
+function screenPatient(){
+  const v=APP.vault; const tpl=activeTemplate();
+  const nodes=[ topbar() ];
+  nodes.push(h("h1",{text:t("patientHome")}));
+
+  if(!tpl){
+    nodes.push(h("div",{class:"card stack"},
+      h("h2",{style:"margin-top:0",text:t("noActiveTpl")}),
+      h("p",{class:"muted",text:t("noActiveTplBody")}),
+      APP.templates.length? h("button",{class:"btn block", onclick:()=>{ APP.screen="chooseTpl"; render(); }}, t("chooseActiveTpl")):null
+    ));
+  } else {
+    nodes.push(h("div",{class:"card"},
+      h("div",{class:"spread"},
+        h("div",{class:"grow"}, h("div",{class:"small muted",text:t("activeTpl")}), h("div",{style:"font-weight:700",text:tplName(tpl)})),
+        APP.templates.length>1? h("button",{class:"btn ghost small", onclick:()=>{ APP.screen="chooseTpl"; render(); }}, t("changeTpl")):null
+      )
+    ));
+
+    if(v.draft && v.draft.templateId===tpl.id){
+      nodes.push(h("div",{class:"notice stack"},
+        h("p",{style:"margin:0",text:t("draftPresent")}),
+        h("button",{class:"btn small", onclick:()=>openEntryForm(null,true)}, t("resumeDraft"))
+      ));
+    }
+
+    nodes.push(h("button",{class:"btn block", onclick:()=>openEntryForm(null,false)}, "＋ "+t("newEntry")));
+    nodes.push(h("div",{class:"grid2", style:"margin-top:12px"},
+      h("button",{class:"btn secondary", onclick:()=>{ APP.screen="export"; render(); }}, t("exportPdf")),
+      h("button",{class:"btn secondary", onclick:()=>{ APP.screen="reminder"; render(); }}, t("addReminder"))
+    ));
+
+    nodes.push(h("h2",{text:t("entries")+" ("+t("entryCount",v.entries.length)+")"}));
+    if(v.entries.length===0){
+      nodes.push(h("p",{class:"muted",text:t("noEntries")}));
+    } else {
+      const list=h("div",{class:"stack"});
+      const sorted=[...v.entries].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+      for(const en of sorted) list.appendChild(entryCard(en));
+      nodes.push(list);
+    }
+  }
+
+  nodes.push(h("hr",{class:"divider"}));
+  nodes.push(h("button",{class:"btn ghost block", onclick:()=>{ APP.screen="settings"; render(); }}, t("settings")));
+  mount(...nodes);
+}
+
+function entrySummary(en){
+  const parts=[];
+  for(const f of en.templateSnapshot.fields){
+    if(f.type==="datetime") continue;
+    const val=en.values[f.id];
+    if(val==null||val==="") continue;
+    let s="";
+    if(f.type==="yesno") s=(val? t("yesLabel"):t("noLabel"));
+    else if(f.type==="multi") s=Array.isArray(val)? val.map(i=>optLabel(f.options[i])).join(", "):"";
+    else if(f.type==="single") s=(f.options[val]? optLabel(f.options[val]):"");
+    else s=String(val);
+    if(s) parts.push(fieldLabel(f)+": "+s);
+    if(parts.length>=2) break;
+  }
+  return parts.join(" · ");
+}
+function entryCard(en){
+  // Change 2: eigene Einträge editier- und löschbar
+  return h("div",{class:"entry"},
+    h("div",{class:"spread"},
+      h("div",{class:"grow"},
+        h("div",{style:"font-weight:700",text:fmtDateTime(en.createdAt)}),
+        h("div",{class:"small muted",text:entrySummary(en)})
+      )
+    ),
+    h("div",{class:"row",style:"margin-top:10px"},
+      h("button",{class:"btn ghost small", onclick:()=>openEntryForm(en.id,false)}, t("edit")),
+      h("button",{class:"btn danger small", onclick:()=>confirmDeleteEntry(en.id)}, t("delete"))
+    )
+  );
+}
+function confirmDeleteEntry(id){
+  if(!window.confirm(t("deleteEntryQ"))) return;
+  APP.vault.entries=APP.vault.entries.filter(e=>e.id!==id);
+  saveVault().then(()=>{ render(); });
+}
+
+function screenChooseTpl(){
+  const nodes=[ topbar(), h("h1",{text:t("chooseActiveTpl")}) ];
+  const list=h("div",{class:"stack"});
+  if(APP.templates.length===0) list.appendChild(h("p",{class:"muted",text:t("noActiveTplBody")}));
+  for(const tpl of APP.templates){
+    const isActive=APP.vault.activeTemplateId===tpl.id;
+    list.appendChild(h("button",{class:"choice"+(isActive?" selected":""), onclick:async ()=>{
+      APP.vault.activeTemplateId=tpl.id; await saveVault(); APP.screen="patient"; render();
+    }},
+      h("div",{class:"grow"},
+        h("div",{style:"font-weight:700",text:tplName(tpl)}),
+        h("div",{class:"small muted",text:(tpl.fields.length)+" "+t("fieldsWord")})
+      ),
+      isActive? h("span",{class:"pill",text:"✓"}):null
+    ));
+  }
+  nodes.push(list);
+  nodes.push(h("hr",{class:"divider"}));
+  nodes.push(h("button",{class:"btn ghost", onclick:()=>{ APP.screen="patient"; render(); }}, "‹ "+t("back")));
+  mount(...nodes);
+}
+
+/* --- Eintrag anlegen / bearbeiten (Change 2) --- */
+function openEntryForm(entryId, fromDraft){
+  APP.editingEntryId=entryId||null;
+  APP.__fromDraft=!!fromDraft;
+  APP.screen="entryForm"; render();
+}
+function screenEntryForm(){
+  const tpl=activeTemplate();
+  if(!tpl){ APP.screen="patient"; render(); return; }
+  let editing=null;
+  if(APP.editingEntryId) editing=APP.vault.entries.find(e=>e.id===APP.editingEntryId);
+
+  let values={}; let createdAt=new Date().toISOString();
+  if(editing){ values=JSON.parse(JSON.stringify(editing.values)); createdAt=editing.createdAt; }
+  else if(APP.__fromDraft && APP.vault.draft && APP.vault.draft.templateId===tpl.id){
+    values=JSON.parse(JSON.stringify(APP.vault.draft.values||{})); createdAt=APP.vault.draft.createdAt||createdAt;
+  }
+
+  const errEl=h("p",{class:"small",style:"color:var(--danger)"});
+  const form=h("div",{class:"stack"});
+
+  form.appendChild(h("div",{class:"fielded"},
+    h("label",{text:t("entryTime")}),
+    h("input",{type:"datetime-local", value:localDatetimeValue(new Date(createdAt)),
+      onchange:e=>{ const d=new Date(e.target.value); if(!isNaN(d)) createdAt=d.toISOString(); }})
+  ));
+
+  for(const f of tpl.fields){
+    if(f.type==="datetime"){
+      const cur=values[f.id]||localDatetimeValue(new Date(createdAt));
+      form.appendChild(fieldWrap(f,
+        h("input",{type:"datetime-local", value:cur, onchange:e=>values[f.id]=e.target.value})
+      ));
+      values[f.id]=values[f.id]||cur;
+      continue;
+    }
+    form.appendChild(renderField(f, values));
+  }
+
+  const saveEntry=async ()=>{
+    errEl.textContent="";
+    for(const f of tpl.fields){
+      if(!f.required) continue;
+      const val=values[f.id];
+      const empty = val==null || val==="" || (Array.isArray(val)&&val.length===0);
+      if(empty){ errEl.textContent=t("fillRequired"); return; }
+    }
+    const snapshot={ id:tpl.id, name:tpl.name, nameEn:tpl.nameEn, fields:JSON.parse(JSON.stringify(tpl.fields)) };
+    if(editing){
+      editing.values=values; editing.createdAt=createdAt; editing.templateSnapshot=snapshot;
+    } else {
+      APP.vault.entries.push({ id:uid("e"), createdAt, templateSnapshot:snapshot, values });
+    }
+    APP.vault.draft=null;
+    await saveVault();
+    APP.editingEntryId=null; APP.__fromDraft=false;
+    toast(t("entrySaved")); APP.screen="patient"; render();
+  };
+  const saveDraftAndLeave=async ()=>{
+    if(!editing){ APP.vault.draft={ templateId:tpl.id, values, createdAt }; await saveVault(); }
+    APP.editingEntryId=null; APP.__fromDraft=false; APP.screen="patient"; render();
+  };
+
+  mount(
+    topbar(),
+    h("div",{class:"spread"},
+      h("h1",{style:"margin:0",text:editing? t("edit"):t("newEntry")}),
+      h("span",{class:"pill",text:tplName(tpl)})
+    ),
+    h("div",{class:"card"}, form, errEl),
+    h("div",{class:"row"},
+      h("button",{class:"btn ghost", onclick:saveDraftAndLeave}, "‹ "+t("back")),
+      h("button",{class:"btn grow", onclick:saveEntry}, t("saveEntry"))
+    )
+  );
+}
+function fieldWrap(f, control){
+  return h("div",{class:"fielded"},
+    h("label",{}, fieldLabel(f), f.required? h("span",{class:"small",style:"color:var(--danger); font-weight:600"}," · "+t("required")):null),
+    control
+  );
+}
+function renderField(f, values){
+  const type=f.type;
+  if(type==="shorttext"){
+    return fieldWrap(f, h("input",{type:"text", value:values[f.id]||"", oninput:e=>values[f.id]=e.target.value}));
+  }
+  if(type==="longtext"){
+    return fieldWrap(f, h("textarea",{oninput:e=>values[f.id]=e.target.value}, values[f.id]||""));
+  }
+  if(type==="number"){
+    return fieldWrap(f, h("input",{type:"number", inputmode:"decimal", value:(values[f.id]!=null?values[f.id]:""), oninput:e=>values[f.id]=e.target.value}));
+  }
+  if(type==="scale"){
+    const min=Number(f.min)||0, max=Number(f.max)||10;
+    if(values[f.id]==null) values[f.id]=Math.round((min+max)/2);
+    const out=h("span",{class:"scaleval",text:String(values[f.id])});
+    const range=h("input",{type:"range", min, max, step:1, value:values[f.id], "aria-label":fieldLabel(f),
+      oninput:e=>{ values[f.id]=Number(e.target.value); out.textContent=e.target.value; }});
+    const ends=h("div",{class:"spread small muted"},
+      h("span",{text:(loc(f.minLabel,f.minLabelEn)? min+" "+loc(f.minLabel,f.minLabelEn):String(min))}),
+      h("span",{text:(loc(f.maxLabel,f.maxLabelEn)? max+" "+loc(f.maxLabel,f.maxLabelEn):String(max))})
+    );
+    return fieldWrap(f, h("div",{class:"stack"}, h("div",{class:"spread"}, range, out), ends));
+  }
+  if(type==="yesno"){
+    const wrap=h("div",{class:"row"});
+    const mk=(val,label)=>h("button",{class:"choice"+(values[f.id]===val?" selected":""), style:"flex:1", onclick:()=>{ values[f.id]=val; refresh(); }}, label);
+    function refresh(){ clear(wrap); wrap.append(mk(true,t("yesLabel")), mk(false,t("noLabel"))); }
+    refresh();
+    return fieldWrap(f, wrap);
+  }
+  if(type==="single"){
+    const wrap=h("div",{class:"stack"});
+    f.options.forEach((o,i)=>{
+      const id=uid("r");
+      wrap.appendChild(h("label",{class:"choice"+(values[f.id]===i?" selected":""), for:id},
+        h("input",{type:"radio", id, name:f.id, checked:values[f.id]===i, onchange:()=>{ values[f.id]=i; render(); }}),
+        h("span",{text:optLabel(o)})
+      ));
+    });
+    return fieldWrap(f, wrap);
+  }
+  if(type==="multi"){
+    if(!Array.isArray(values[f.id])) values[f.id]=[];
+    const wrap=h("div",{class:"stack"});
+    f.options.forEach((o,i)=>{
+      const id=uid("c");
+      const checked=values[f.id].includes(i);
+      wrap.appendChild(h("label",{class:"choice"+(checked?" selected":""), for:id},
+        h("input",{type:"checkbox", id, checked, onchange:e=>{
+          const arr=values[f.id];
+          if(e.target.checked){ if(!arr.includes(i)) arr.push(i); } else { values[f.id]=arr.filter(x=>x!==i); }
+          render();
+        }}),
+        h("span",{text:optLabel(o)})
+      ));
+    });
+    return fieldWrap(f, wrap);
+  }
+  return fieldWrap(f, h("input",{type:"text", value:values[f.id]||"", oninput:e=>values[f.id]=e.target.value}));
+}
+
+/* --- Einstellungen --- */
+function screenSettings(){
+  const s=APP.vault.settings;
+  const nameIn=h("input",{type:"text", value:s.patientName||"", oninput:e=>s.patientName=e.target.value});
+  const pwIn=h("input",{type:"password", autocomplete:"off", value:s.pdfPassword||"", oninput:e=>s.pdfPassword=e.target.value});
+  const pwErr=h("p",{class:"small",style:"color:var(--danger)"});
+
+  const saveSettings=async ()=>{
+    pwErr.textContent="";
+    if(s.pdfPassword){
+      const meta=loadMeta();
+      try{
+        const key=await deriveKey(s.pdfPassword, b64ToBytes(meta.salt), meta.iterations||KDF_ITERATIONS);
+        await decryptJSON(key, LS.get(LS_KEYS.vault)); // Erfolg => identisch mit PIN
+        pwErr.textContent=t("pdfPwEqualsPin"); return;
+      }catch(e){ /* gut: unterschiedlich */ }
+    }
+    await saveVault();
+    toast(t("pdfPwSaved"));
+  };
+
+  mount(
+    topbar(),
+    h("h1",{text:t("settings")}),
+    h("div",{class:"card stack"},
+      h("div",{}, h("label",{text:t("setName")}), h("p",{class:"hint",text:t("setNameHint")}), nameIn),
+      h("div",{}, h("label",{text:t("setPdfPw")}), h("p",{class:"hint",text:t("setPdfPwHint")}), pwIn, pwErr),
+      h("button",{class:"btn block", onclick:saveSettings}, t("save"))
+    ),
+    h("div",{class:"card stack"},
+      h("h2",{style:"margin-top:0",text:t("homeScreenHelp")}),
+      h("p",{class:"small",style:"margin:0",text:t("ob4iOS")}),
+      h("p",{class:"small",style:"margin:0",text:t("ob4Android")})
+    ),
+    h("div",{class:"card stack"},
+      h("h2",{style:"margin-top:0",text:t("crisisNumbers")}),
+      h("p",{class:"small",style:"margin:0",text:NOTFALL.notruf}),
+      h("p",{class:"small",style:"margin:0",text:NOTFALL.seelsorge}),
+      h("p",{class:"small",style:"margin:0",text:NOTFALL.praxis})
+    ),
+    h("div",{class:"card stack"},
+      h("h2",{style:"margin-top:0; color:var(--danger)",text:t("dangerZone")}),
+      h("p",{class:"small muted",style:"margin:0",text:t("dangerBody")}),
+      h("button",{class:"btn danger", onclick:resetAll}, t("dangerZone"))
+    ),
+    h("hr",{class:"divider"}),
+    h("button",{class:"btn ghost", onclick:()=>{ APP.screen="patient"; render(); }}, "‹ "+t("back"))
+  );
+}
+function resetAll(){
+  if(!window.confirm(t("resetConfirm"))) return;
+  LS.del(LS_KEYS.vault); LS.del(LS_KEYS.meta); LS.del(LS_KEYS.templates);
+  APP.key=null; APP.vault=null; APP.templates=[];
+  toast(t("resetDone")); APP.onboardStep=0; APP.screen="onboarding"; render();
+}
+
+/* --- PDF-Export --- */
+function entriesInRange(entries, fromISO, toISO){
+  return entries.filter(e=>{
+    const ts=new Date(e.createdAt).getTime();
+    if(fromISO && ts<new Date(fromISO).getTime()) return false;
+    if(toISO && ts>new Date(toISO).getTime()+86399000) return false;
+    return true;
+  }).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+}
+function screenExport(){
+  const s=APP.vault.settings;
+  const entries=APP.vault.entries;
+  const problems=[];
+  if(!s.patientName||!s.patientName.trim()) problems.push(t("exportNoName"));
+  if(!s.pdfPassword) problems.push(t("exportNoPw"));
+  if(entries.length===0) problems.push(t("exportNoEntries"));
+
+  const nodes=[ topbar(), h("h1",{text:t("exportTitle")}) ];
+
+  if(problems.length){
+    const box=h("div",{class:"notice warn stack"});
+    problems.forEach(p=>box.appendChild(h("p",{style:"margin:0",text:p})));
+    nodes.push(box);
+    nodes.push(h("div",{class:"row"},
+      h("button",{class:"btn ghost", onclick:()=>{ APP.screen="patient"; render(); }}, "‹ "+t("back")),
+      (!s.patientName||!s.pdfPassword)? h("button",{class:"btn", onclick:()=>{ APP.screen="settings"; render(); }}, t("settings")):null
+    ));
+    mount(...nodes); return;
+  }
+
+  const dates=entries.map(e=>new Date(e.createdAt));
+  const minD=new Date(Math.min(...dates)), maxD=new Date(Math.max(...dates));
+  let fromV=fmtInputDate(minD), toV=fmtInputDate(maxD);
+  const fromIn=h("input",{type:"date", value:fromV, onchange:e=>fromV=e.target.value});
+  const toIn=h("input",{type:"date", value:toV, onchange:e=>toV=e.target.value});
+  const statusEl=h("p",{class:"small muted"});
+
+  const doExport=async ()=>{
+    const sel=entriesInRange(entries, fromV, toV);
+    if(sel.length===0){ statusEl.textContent=t("exportNoEntries"); return; }
+    statusEl.textContent="…";
+    const bytes=generateProtocolPdf(sel, s.patientName, fromV, toV);
+    const blob=new Blob([bytes], {type:"application/pdf"});
+    const fname="Protokoll_"+sanitizeFilename(s.patientName)+"_"+fmtInputDate(new Date())+".pdf";
+    statusEl.textContent=t("exportReady");
+    let shared=false;
+    try{
+      if(navigator.canShare){
+        const file=new File([blob], fname, {type:"application/pdf"});
+        if(navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:fname}); shared=true; }
+      }
+    }catch(e){}
+    if(!shared) downloadBlob(blob, fname);
+  };
+
+  nodes.push(
+    h("div",{class:"card stack"},
+      h("p",{class:"muted",text:t("exportRange")}),
+      h("div",{class:"grid2"},
+        h("div",{}, h("label",{text:t("from")}), fromIn),
+        h("div",{}, h("label",{text:t("to")}), toIn)
+      ),
+      h("p",{class:"small muted",style:"margin:0",text:t("exportShare")}),
+      h("button",{class:"btn block", onclick:doExport}, t("exportGenerate")),
+      statusEl
+    ),
+    h("button",{class:"btn ghost", onclick:()=>{ APP.screen="patient"; render(); }}, "‹ "+t("back"))
+  );
+  mount(...nodes);
+}
+function fmtInputDate(d){ const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function sanitizeFilename(s){ return (s||"protokoll").replace(/[^\p{L}\p{N}_-]+/gu,"_").slice(0,40); }
+function downloadBlob(blob, filename){
+  const url=URL.createObjectURL(blob);
+  const a=h("a",{href:url, download:filename}); document.body.appendChild(a); a.click();
+  setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); }, 1500);
+}
+function generateProtocolPdf(entries, patientName, fromV, toV){
+  const blocks=[];
+  const range=t("from")+" "+fmtDate(fromV)+" "+t("to")+" "+fmtDate(toV);
+  blocks.push({text:patientName, size:20, gap:2});
+  blocks.push({text:(LANG==="en"?"Therapy log":"Therapie-Protokoll")+" · "+range, size:10.5, gap:6});
+  blocks.push({rule:true, size:2, gap:10});
+  entries.forEach((en)=>{
+    const tn = loc(en.templateSnapshot.name, en.templateSnapshot.nameEn);
+    blocks.push({text:fmtDateTime(en.createdAt)+"  —  "+tn, size:12.5, gap:3});
+    for(const f of en.templateSnapshot.fields){
+      if(f.type==="datetime") continue;
+      const sv=formatValueForPdf(f, en.values[f.id]);
+      if(sv==="") continue;
+      blocks.push({text:fieldLabel(f)+": "+sv, size:11, gap:2, indent:10});
+    }
+    blocks.push({text:"", size:6, gap:8});
+  });
+  return buildPdf(blocks, {title:(LANG==="en"?"Therapy log — ":"Therapie-Protokoll — ")+patientName}, APP.vault.settings.pdfPassword);
+}
+function formatValueForPdf(f, val){
+  if(val==null||val==="") return "";
+  if(f.type==="yesno") return val? t("yesLabel"):t("noLabel");
+  if(f.type==="scale") return String(val)+" / "+(f.max!=null?f.max:10);
+  if(f.type==="multi") return Array.isArray(val)? val.map(i=>f.options[i]?optLabel(f.options[i]):"").filter(Boolean).join(", "):"";
+  if(f.type==="single") return f.options[val]? optLabel(f.options[val]):"";
+  if(f.type==="datetime") return fmtDateTime(val);
+  return String(val);
+}
+
+/* --- Reminder (.ics) --- */
+function screenReminder(){
+  const tpl=activeTemplate();
+  const nodes=[ topbar(), h("h1",{text:t("reminderTitle")}) ];
+  if(!tpl || !tpl.reminder || !tpl.reminder.enabled){
+    nodes.push(h("div",{class:"notice"}, h("p",{style:"margin:0",text:t("reminderNone")})));
+    nodes.push(h("button",{class:"btn ghost",style:"margin-top:12px", onclick:()=>{ APP.screen="patient"; render(); }}, "‹ "+t("back")));
+    mount(...nodes); return;
+  }
+  const r=tpl.reminder;
+  const canOverride = r.patientCanOverride!==false;
+  const override=APP.vault.reminderOverride||(APP.vault.reminderOverride={});
+  let time = (canOverride && override[tpl.id]) ? override[tpl.id] : r.time;
+  const timeIn=h("input",{type:"time", value:time, disabled:!canOverride, onchange:async e=>{ time=e.target.value; if(canOverride){ override[tpl.id]=time; await saveVault(); } }});
+  const freqLabel = t("freq"+(r.freq||"DAILY"));
+  const download=()=>{ openIcs(buildIcs(tpl, time), "Erinnerung_"+sanitizeFilename(tpl.name)+".ics"); };
+  nodes.push(
+    h("div",{class:"card stack"},
+      h("p",{class:"muted",text:t("reminderBody")}),
+      h("div",{}, h("label",{text:t("reminderTime")}), timeIn,
+        canOverride? h("p",{class:"hint",text:t("reminderOverrideHint")}):null),
+      h("div",{class:"spread"}, h("span",{style:"font-weight:600",text:t("reminderFreq")}), h("span",{class:"pill",text:freqLabel})),
+      h("button",{class:"btn block", onclick:download}, t("reminderDownload")),
+      isIOS()? h("p",{class:"hint",style:"margin:0",text:t("reminderIosHint")}):null
+    ),
+    h("button",{class:"btn ghost", onclick:()=>{ APP.screen="patient"; render(); }}, "‹ "+t("back"))
+  );
+  mount(...nodes);
+}
+// Kalender-Datei ausliefern. Auf iOS als data:-URL (ohne download-Attribut), damit iOS die
+// Termin-Vorschau/„Zum Kalender hinzufügen" anbietet statt nur „In Dateien sichern".
+function openIcs(ics, filename){
+  if(isIOS()){
+    const a=h("a",{href:"data:text/calendar;charset=utf-8,"+encodeURIComponent(ics), target:"_blank", rel:"noopener"});
+    document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),1500);
+  } else {
+    downloadBlob(new Blob([ics], {type:"text/calendar"}), filename);
+  }
+}
+function buildIcs(tpl, time){
+  const [hh,mm]=(time||"20:00").split(":").map(Number);
+  const now=new Date();
+  const start=new Date(now.getFullYear(),now.getMonth(),now.getDate(),hh||20,mm||0,0);
+  if(start.getTime()<now.getTime()) start.setDate(start.getDate()+1);
+  const end=new Date(start.getTime()+15*60000);
+  const p=n=>String(n).padStart(2,"0");
+  const fmt=d=>d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"T"+p(d.getHours())+p(d.getMinutes())+"00";
+  const fmtU=d=>d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+"T"+p(d.getUTCHours())+p(d.getUTCMinutes())+p(d.getUTCSeconds())+"Z";
+  const freq=tpl.reminder.freq||"DAILY";
+  const rrule = freq==="NONE"? null : (freq==="WEEKLY"?"RRULE:FREQ=WEEKLY":"RRULE:FREQ=DAILY");
+  const summary=(LANG==="en"?"Log reminder: ":"Erinnerung Protokoll: ")+tplName(tpl);
+  const desc=(LANG==="en"?"Time to fill in your log. Open the app: ":"Zeit für deinen Protokolleintrag. App öffnen: ")+PROTOKOLL_APP_URL;
+  const esc=s=>String(s).replace(/([,;\\])/g,"\\$1").replace(/\n/g,"\\n");
+  const uidStr=uid("ics")+"@protokoll.local";
+  let lines=[
+    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Therapie-Protokoll//DE","CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT","UID:"+uidStr,"DTSTAMP:"+fmtU(new Date()),
+    "DTSTART:"+fmt(start),"DTEND:"+fmt(end)
+  ];
+  if(rrule) lines.push(rrule);
+  lines.push("SUMMARY:"+esc(summary));
+  lines.push("DESCRIPTION:"+esc(desc));
+  lines.push("URL:"+PROTOKOLL_APP_URL);
+  lines.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+esc(summary),"TRIGGER:PT0M","END:VALARM");
+  lines.push("END:VEVENT","END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+/* --- Template-Import (Patient öffnet #tpl= Link; nur übernehmen, nie bearbeiten) --- */
+function screenImport(){
+  const imp=APP.pendingImport;
+  const nodes=[ topbar(), h("h1",{text:t("importTitle")}) ];
+  if(!imp || !imp.name){
+    nodes.push(h("div",{class:"notice warn"}, h("p",{style:"margin:0",text:t("importBad")})));
+    nodes.push(h("button",{class:"btn ghost",style:"margin-top:12px", onclick:()=>{ APP.pendingImport=null; goHomeAfterImport(); }}, t("done")));
+    mount(...nodes); return;
+  }
+  const doImport=async (setActive)=>{
+    const copy=JSON.parse(JSON.stringify(imp));
+    copy.id=uid("tpl");
+    (copy.fields||[]).forEach(f=>f.id=uid("f"));
+    APP.templates.push(copy); saveTemplates(APP.templates);
+    addImportedSig(APP.pendingImportSig); // gleichen Link nicht bei jedem Shortcut-Start erneut anbieten
+    if(setActive && APP.key && APP.vault){ APP.vault.activeTemplateId=copy.id; await saveVault(); }
+    APP.pendingImport=null; APP.pendingImportSig=null; toast(t("imported"));
+    goHomeAfterImport();
+  };
+  const canSetActive = !!(APP.key && APP.vault);
+  nodes.push(
+    h("div",{class:"card stack"},
+      h("p",{class:"muted",text:t("importBody")}),
+      h("div",{class:"notice"},
+        h("div",{style:"font-weight:700",text:tplName(imp)}),
+        h("div",{class:"small muted",text:(imp.fields?imp.fields.length:0)+" "+t("fieldsWord")})
+      ),
+      canSetActive? h("button",{class:"btn block", onclick:()=>doImport(true)}, t("importSetActive")):null,
+      h("button",{class:(canSetActive?"btn secondary block":"btn block"), onclick:()=>doImport(false)}, t("importDo"))
+    ),
+    h("button",{class:"btn ghost", onclick:()=>{ APP.pendingImport=null; goHomeAfterImport(); }}, t("cancel"))
+  );
+  mount(...nodes);
+}
+function goHomeAfterImport(){
+  try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){ location.hash=""; }
+  const meta=loadMeta();
+  if(APP.key && APP.vault){ APP.screen="patient"; }
+  else if(meta && meta.hasVault){ APP.screen="unlock"; }
+  else { APP.onboardStep=0; APP.screen="onboarding"; }
+  render();
+}
+
+/* =========================================================================
+   13. Router
+   ========================================================================= */
+function render(){
+  document.documentElement.lang=LANG;
+  switch(APP.screen){
+    case "insecure": return screenInsecure();
+    case "install": return screenInstall();
+    case "onboarding": return screenOnboarding();
+    case "unlock": return screenUnlock();
+    case "patient": return screenPatient();
+    case "chooseTpl": return screenChooseTpl();
+    case "entryForm": return screenEntryForm();
+    case "settings": return screenSettings();
+    case "export": return screenExport();
+    case "reminder": return screenReminder();
+    case "import": return screenImport();
+    default: return routeStart();
+  }
+}
+
+/* =========================================================================
+   14. Start
+   ========================================================================= */
+// Liefert {obj, sig} bei gültigem #tpl=, {bad:true, sig} bei defektem, sonst null.
+function parseHashImport(){
+  const m=(location.hash||"").match(/#tpl=([^&]+)/);
+  if(!m) return null;
+  try{ return { obj:decodeHashToObj(m[1]), sig:m[1] }; }catch(e){ return { bad:true, sig:(m&&m[1])||"" }; }
+}
+// Nach Gate/Import: an die passende Stelle springen.
+function routeStart(){
+  const meta=loadMeta();
+  if(APP.pendingImport){ APP.screen="import"; }
+  else if(meta && meta.hasVault){ APP.screen="unlock"; }
+  else { APP.onboardStep=0; APP.screen="onboarding"; }
+  render();
+}
+function boot(){
+  APP.templates=loadTemplates();
+  const secure = (typeof window.isSecureContext==="boolean"? window.isSecureContext : (location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1"))
+                 && window.crypto && window.crypto.subtle;
+  if(!secure){ APP.screen="insecure"; render(); return; }
+
+  const imp=parseHashImport();
+  if(imp && !imp.bad){
+    if(importedSigs().includes(imp.sig)){
+      // Dieser Vorlagen-Link wurde bereits übernommen (z.B. Home-Bildschirm-Shortcut mit #tpl=):
+      // nicht erneut anbieten, Hash entfernen, normal starten.
+      try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+    } else {
+      APP.pendingImport=imp.obj; APP.pendingImportSig=imp.sig;
+    }
+  } else if(imp && imp.bad){
+    APP.pendingImport={}; APP.pendingImportSig="";
+  }
+
+  // Home-Bildschirm-Gate: nur für neue Nutzer:innen im Browser (nicht als installierte App, kein Vault).
+  const meta=loadMeta();
+  if(!isStandalone() && !(meta && meta.hasVault)){ APP.screen="install"; render(); return; }
+  routeStart();
+}
+window.addEventListener("hashchange", ()=>{
+  const imp=parseHashImport();
+  if(imp && !imp.bad && !importedSigs().includes(imp.sig)){
+    APP.pendingImport=imp.obj; APP.pendingImportSig=imp.sig; APP.screen="import"; render();
+  }
+});
+boot();
+</script>

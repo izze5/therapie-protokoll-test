@@ -1,0 +1,743 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#5e806c">
+<title>Vorlagen-Verwaltung</title>
+<!--
+  THERAPEUTINNEN-APP  (admin.html)
+  ================================
+  Eine einzige, vollständig selbstenthaltene Datei. Getrennt von der Patienten-App (index.html).
+
+  Zweck: Vorlagen (Templates) verwalten und per Link teilen. Diese Datei enthält KEINE
+  Patientendaten, keinen PIN-/Vault-Mechanismus und keinen PDF-Export. Sie liegt unter einem
+  eigenen, nicht von der Patienten-App verlinkten Pfad.
+
+  Harte Regeln bleiben: null externe Aufrufe, eine Datei, kein Tracking/Konto/Cloud.
+
+  Gemeinsame Logik mit index.html (Template-Datenmodell, Kodier-/Dekodier-Funktion für
+  Teilen-Links, i18n) ist hier IDENTISCH dupliziert, damit die erzeugten Links exakt zur
+  Patienten-App passen. PROTOKOLL_APP_URL zeigt auf die Patienten-App (index.html).
+-->
+<style>
+  :root{
+    --bg:#eef2ec; --surface:#ffffff; --surface-2:#f6f9f4;
+    --ink:#28312c; --muted:#5c6b62; --line:#d5ddd1;
+    --sage:#5e806c; --sage-strong:#496554; --sage-soft:#e3ede4;
+    --focus:#2f5c47; --danger:#a24a40; --danger-soft:#f6e7e4;
+    --radius:14px; --tap:52px; --maxw:640px;
+    --shadow:0 1px 2px rgba(40,60,50,.06), 0 6px 20px rgba(40,60,50,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#161c19; --surface:#1e2622; --surface-2:#232d28;
+      --ink:#e7eee8; --muted:#a3b1a8; --line:#33403a;
+      --sage:#8fb39c; --sage-strong:#a9c7b4; --sage-soft:#26312b;
+      --focus:#9fc7ac; --danger:#e0908a; --danger-soft:#3a2624;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.3);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;
+    font-size:17px; line-height:1.5;
+    -webkit-text-size-adjust:100%;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:16px 16px 40px}
+  h1{font-size:1.5rem; line-height:1.25; margin:.2em 0 .4em; letter-spacing:-.01em}
+  h2{font-size:1.2rem; margin:1.2em 0 .5em}
+  h3{font-size:1.02rem; margin:1em 0 .35em}
+  p{margin:.5em 0}
+  .muted{color:var(--muted)}
+  .small{font-size:.9rem}
+  a{color:var(--sage-strong)}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+        padding:16px; margin:12px 0; box-shadow:var(--shadow)}
+  .stack>*+*{margin-top:12px}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .spread{display:flex; gap:10px; align-items:center; justify-content:space-between}
+  .grow{flex:1 1 auto; min-width:0}
+  label{display:block; font-weight:600; margin:.2em 0 .3em}
+  .hint{font-weight:400; color:var(--muted); font-size:.9rem; margin:-.1em 0 .4em}
+  input,textarea,select{
+    width:100%; font:inherit; color:var(--ink);
+    background:var(--surface-2); border:1.5px solid var(--line); border-radius:10px;
+    padding:12px 12px; min-height:var(--tap);
+  }
+  textarea{min-height:110px; resize:vertical}
+  input[type=checkbox],input[type=radio]{width:24px; height:24px; min-height:auto; accent-color:var(--sage); flex:0 0 auto}
+  button{font:inherit}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    min-height:var(--tap); padding:12px 18px; border-radius:12px; cursor:pointer;
+    border:1.5px solid var(--sage); background:var(--sage); color:#fff; font-weight:650;
+    text-decoration:none; line-height:1.2;
+  }
+  .btn.block{width:100%}
+  .btn.secondary{background:transparent; color:var(--sage-strong); border-color:var(--sage)}
+  .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line)}
+  .btn.danger{background:transparent; color:var(--danger); border-color:var(--danger)}
+  .btn.small{min-height:40px; padding:8px 12px; font-size:.92rem; border-radius:10px}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+  .btn:active{transform:translateY(1px)}
+  :focus-visible{outline:3px solid var(--focus); outline-offset:2px; border-radius:6px}
+  .choice{display:flex; align-items:center; gap:12px; padding:12px; border:1.5px solid var(--line);
+          border-radius:12px; background:var(--surface-2); cursor:pointer; min-height:var(--tap); font-weight:500}
+  .choice input{margin:0}
+  .choice.selected{border-color:var(--sage); background:var(--sage-soft)}
+  .pill{display:inline-block; font-size:.78rem; padding:2px 10px; border-radius:999px;
+        background:var(--sage-soft); color:var(--sage-strong); font-weight:650}
+  .divider{height:1px; background:var(--line); margin:14px 0; border:0}
+  .topbar{display:flex; align-items:center; gap:10px; justify-content:space-between; margin-bottom:4px}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:750; letter-spacing:-.01em}
+  .leaf{width:26px; height:26px; flex:0 0 auto}
+  .notice{border-left:4px solid var(--sage); background:var(--surface-2); padding:12px 14px; border-radius:8px}
+  .notice.warn{border-color:var(--danger); background:var(--danger-soft)}
+  .langtoggle{display:inline-flex; border:1.5px solid var(--line); border-radius:999px; overflow:hidden}
+  .langtoggle button{border:0; background:transparent; color:var(--muted); padding:8px 14px; min-height:40px; cursor:pointer; font-weight:650}
+  .langtoggle button.on{background:var(--sage); color:#fff}
+  .fielded{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
+  .fielded+.fielded{margin-top:10px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  @media (max-width:460px){ .grid2{grid-template-columns:1fr} }
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+         background:var(--ink); color:var(--bg); padding:12px 18px; border-radius:12px; box-shadow:var(--shadow);
+         max-width:90%; z-index:50}
+  @media (prefers-reduced-motion: no-preference){
+    .btn,.choice{transition:transform .06s ease, background .15s ease, border-color .15s ease}
+    .screen{animation:fade .18s ease}
+    @keyframes fade{from{opacity:0} to{opacity:1}}
+  }
+</style>
+
+<div class="wrap" id="app" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   0. Zentrale Konstanten
+   ========================================================================= */
+// Zeigt auf die PATIENTEN-App (index.html). Fließt in die erzeugten Teilen-Links ein.
+// Bei Umzug GitHub Pages -> Praxis-Subdomain nur diese Zeile ändern.
+const PROTOKOLL_APP_URL = "https://izze5.github.io/therapie-protokoll-test/index.html";
+
+// Zugangs-Passwort für diese Verwaltungs-Seite.
+// WICHTIG: Das ist nur ein clientseitiges "Türschloss". Es hält Neugierige und Zufalls-Aufrufe
+// ab, ist aber KEINE echte Sicherheit – wer den Quelltext dieser Datei öffnet, sieht das
+// Passwort im Klartext. Die eigentliche Absicherung ist der nicht-öffentliche, nicht verlinkte
+// Ablageort dieser Datei. Hier bewusst kein WebCrypto/Hashing, weil es die Scheinsicherheit
+// nicht erhöhen würde. Vor Echtbetrieb ändern.
+const ADMIN_PASSWORT = "praxis-vorlagen";
+
+const LS_KEYS = { templates:"tp_admin_templates_v1", prefs:"tp_prefs_v1" };
+
+/* =========================================================================
+   1. localStorage-Helfer
+   ========================================================================= */
+const LS = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+
+/* =========================================================================
+   2. Base64 / Teilen-Link Kodierung   [IDENTISCH in index.html und admin.html]
+   ========================================================================= */
+function bytesToB64(bytes){
+  let s=""; const CH=0x8000;
+  for(let i=0;i<bytes.length;i+=CH){ s+=String.fromCharCode.apply(null, bytes.subarray(i,i+CH)); }
+  return btoa(s);
+}
+function b64ToBytes(b64){
+  const s=atob(b64); const out=new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) out[i]=s.charCodeAt(i);
+  return out;
+}
+function b64url(b64){ return b64.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function unb64url(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; return s; }
+function encodeObjToHash(obj){ return b64url(bytesToB64(new TextEncoder().encode(JSON.stringify(obj)))); }
+function decodeHashToObj(s){ return JSON.parse(new TextDecoder().decode(b64ToBytes(unb64url(s)))); }
+
+/* =========================================================================
+   3. i18n — Oberflächentexte   [IDENTISCH in index.html und admin.html]
+   ========================================================================= */
+const I18N = {
+  de:{
+    appName:"Therapie-Protokoll",
+    langLabel:"Sprache",
+    chooseRole:"Willkommen", chooseRoleSub:"Wie möchten Sie die App nutzen?",
+    rolePatient:"Ich führe Protokolle", rolePatientSub:"Patient:innen-Modus – protokollieren und exportieren",
+    roleTherapist:"Ich verwalte Vorlagen", roleTherapistSub:"Therapeut:innen-Modus – Vorlagen bearbeiten und teilen",
+    back:"Zurück", next:"Weiter", cancel:"Abbrechen", save:"Speichern", delete:"Löschen",
+    confirm:"Übernehmen", edit:"Bearbeiten", duplicate:"Duplizieren", rename:"Umbenennen", add:"Hinzufügen", done:"Fertig",
+    insecureTitle:"Sicherer Kontext erforderlich",
+    insecureBody:"Diese App verschlüsselt Ihre Daten mit der eingebauten Browser-Verschlüsselung. Diese ist nur über HTTPS oder localhost verfügbar. Über eine direkt geöffnete Datei (file://) oder unverschlüsseltes HTTP funktioniert das nicht.",
+    insecureHow:"Bitte öffnen Sie die App über eine HTTPS-Adresse oder über http://localhost.",
+    installTitle:"Zuerst zum Home-Bildschirm hinzufügen",
+    installBody:"Damit Ihre Einträge sicher gespeichert bleiben, fügen Sie die App zuerst zum Home-Bildschirm hinzu und richten dann alles über das neue Symbol ein.",
+    installWhy:"Wichtig: Legen Sie PIN und Einträge erst an, nachdem Sie die App über das Home-Symbol geöffnet haben. Sonst können die Daten später verloren gehen – besonders auf dem iPhone speichert die App über das Home-Symbol getrennt vom Browser.",
+    installReopen:"Öffnen Sie die App danach über das neue Symbol auf dem Home-Bildschirm und fahren dort fort.",
+    installDetected:"Ein Vorlagen-Link wurde erkannt. Er wird übernommen, sobald Sie fortfahren.",
+    installContinue:"Weiter im Browser (z. B. am Computer)",
+    ob1Title:"Ihre Daten bleiben bei Ihnen",
+    ob1Body:"Alles, was Sie hier eintragen, bleibt lokal auf diesem Gerät. Die App sendet von sich aus nichts ins Internet – kein Konto, kein Server, kein Mitlesen. Ihre Therapeutin bekommt nur das, was Sie ihr selbst als PDF schicken.",
+    ob2Title:"Wichtig: kein Notfallkanal",
+    ob2Body:"Diese App wird nicht überwacht. Niemand liest hier mit oder reagiert auf Einträge. Wenn es Ihnen akut schlecht geht oder Sie in einer Krise sind, wenden Sie sich bitte sofort an:",
+    ob3Title:"Bitte gut merken",
+    ob3Body:"Ihre Daten liegen nur auf diesem Gerät und sind mit Ihrer PIN verschlüsselt. Es gibt kein Backup und kein Zurücksetzen: Wenn Sie die PIN vergessen oder das Gerät verloren geht oder kaputt ist, sind die Einträge unwiederbringlich weg.",
+    ob3Safety:"Ihr Sicherheitsnetz: die App zum Home-Bildschirm hinzufügen und regelmäßig ein PDF an Ihre Therapeutin schicken.",
+    ob4Title:"Zum Home-Bildschirm hinzufügen",
+    ob4Body:"Das schützt Ihre gespeicherten Daten – besonders auf dem iPhone, wo der Browser Daten sonst nach etwa 7 Tagen ohne Nutzung löschen kann.",
+    ob4iOS:"iPhone (Safari): unten auf das Teilen-Symbol tippen, dann „Zum Home-Bildschirm“.",
+    ob4Android:"Android (Chrome): oben rechts auf das Menü (drei Punkte), dann „Zum Startbildschirm hinzufügen“.",
+    ob4Note:"Sie können das jetzt oder später machen. Der Punkt ist immer über „Einstellungen“ erreichbar.",
+    obIntroTitle:"So tragen Sie ein",
+    obIntroBody:"Tragen Sie ein, was gerade stimmt, so ehrlich und unkompliziert wie möglich. Es muss nicht perfekt oder vollständig sein. Falls Ihnen später ein Fehler auffällt, können Sie einen Eintrag noch ändern.",
+    ob5Title:"PIN festlegen",
+    ob5Body:"Mit dieser PIN entsperren Sie die App und verschlüsseln Ihre Einträge. Wählen Sie etwas, das Sie sich gut merken und das nicht leicht zu erraten ist. Geben Sie die PIN niemandem weiter – auch nicht Ihrer Therapeutin.",
+    ob5Warn:"Es gibt kein Zurücksetzen und kein Backup: Wenn Sie die PIN vergessen oder das Gerät verlieren, sind die Einträge weg. Ihr Sicherheitsnetz: regelmäßig ein PDF an Ihre Therapeutin senden.",
+    pinLabel:"PIN (mindestens 4 Zeichen)", pinRepeat:"PIN wiederholen",
+    pinMismatch:"Die beiden Eingaben stimmen nicht überein.",
+    pinTooShort:"Bitte mindestens 4 Zeichen.",
+    startProtocol:"Los geht’s",
+    unlockTitle:"App entsperren", unlockBody:"Bitte geben Sie Ihre PIN ein.",
+    unlock:"Entsperren", unlockWrong:"Falsche PIN. Ihre Daten bleiben verschlüsselt.",
+    patientHome:"Meine Protokolle", noActiveTpl:"Noch keine aktive Vorlage.",
+    noActiveTplBody:"Öffnen Sie einen Vorlagen-Link Ihrer Therapeutin. Danach können Sie hier protokollieren.",
+    chooseActiveTpl:"Vorlage auswählen", activeTpl:"Aktive Vorlage", changeTpl:"Vorlage wechseln",
+    newEntry:"Neuer Eintrag", entries:"Einträge", noEntries:"Noch keine Einträge. Wenn Sie mögen, legen Sie Ihren ersten an.",
+    resumeDraft:"Entwurf fortsetzen", draftPresent:"Sie haben einen unfertigen Eintrag.",
+    exportPdf:"Als PDF exportieren", addReminder:"Kalender-Erinnerung", settings:"Einstellungen",
+    switchToTherapist:"Zu Vorlagen (Therapeut:in)", switchToPatient:"Zu meinen Protokollen",
+    entryTime:"Zeitpunkt", required:"Pflichtfeld", saveEntry:"Eintrag speichern",
+    fillRequired:"Bitte füllen Sie die Pflichtfelder aus.", entrySaved:"Eintrag gespeichert.",
+    deleteEntryQ:"Diesen Eintrag wirklich löschen?", yes:"Ja", no:"Nein",
+    setName:"Name (erscheint im PDF-Kopf)", setNameHint:"Voller Name, so wie ihn Ihre Therapeutin zuordnen kann.",
+    setPdfPw:"PDF-Passwort", setPdfPwHint:"Schützt exportierte PDFs. Vereinbaren Sie es mündlich mit Ihrer Therapeutin. Es muss sich von Ihrer App-PIN unterscheiden.",
+    pdfPwEqualsPin:"Das PDF-Passwort darf nicht mit Ihrer App-PIN identisch sein. Bitte wählen Sie ein anderes.",
+    pdfPwSaved:"Gespeichert.", crisisNumbers:"Notfallnummern", homeScreenHelp:"Zum Home-Bildschirm hinzufügen",
+    dangerZone:"Alles zurücksetzen", dangerBody:"Löscht alle Einträge, die Vorlage und Einstellungen auf diesem Gerät. Unwiderruflich, kein Backup.",
+    resetConfirm:"Wirklich alles unwiderruflich löschen?", resetDone:"Alles gelöscht.",
+    exportTitle:"PDF-Export", exportNoName:"Bitte tragen Sie zuerst in den Einstellungen Ihren Namen ein.",
+    exportNoPw:"Bitte legen Sie zuerst in den Einstellungen ein PDF-Passwort fest.",
+    exportNoEntries:"Es gibt noch keine Einträge zum Exportieren.",
+    exportRange:"Zeitraum", exportAll:"Alle Einträge", exportGenerate:"PDF erstellen",
+    exportReady:"PDF erstellt und passwortgeschützt.", exportShare:"Teilen / Speichern",
+    from:"von", to:"bis",
+    reminderTitle:"Kalender-Erinnerung", reminderNone:"Für diese Vorlage ist keine Erinnerungszeit hinterlegt.",
+    reminderBody:"Es wird ein Kalendereintrag erstellt (.ics), den Ihr Systemkalender öffnet. Die Erinnerung läuft danach im Kalender – sie öffnet den Kalender, nicht automatisch die App (der Link steht im Termin).",
+    reminderTime:"Uhrzeit", reminderFreq:"Wiederholung",
+    freqDAILY:"Täglich", freqWEEKLY:"Wöchentlich", freqNONE:"Einmalig",
+    reminderDownload:"Kalendereintrag hinzufügen", reminderOverrideHint:"Sie können die Zeit für sich anpassen.",
+    reminderIosHint:"Tipp fürs iPhone: Nach dem Antippen öffnet sich eine Termin-Vorschau – dort auf „Hinzufügen“ tippen, um ihn in den Kalender zu übernehmen.",
+    tplLibrary:"Vorlagen-Bibliothek", tplLibrarySub:"Presets sind editierbar. Änderungen bleiben dauerhaft. Für Einzelfälle duplizieren.",
+    newFromScratch:"Neue leere Vorlage", shareTpl:"Teilen (Link)", useAsActive:"Als aktive Vorlage nutzen",
+    editTplTitle:"Vorlage bearbeiten", tplName:"Name der Vorlage", tplNameEn:"Name (Englisch, optional)",
+    reminderConfig:"Erinnerung (für Patient:in vorbelegt)", reminderEnable:"Erinnerung aktivieren",
+    patientCanOverride:"Patient:in darf die Zeit anpassen",
+    fields:"Felder", addField:"Feld hinzufügen", noFields:"Noch keine Felder. Fügen Sie das erste hinzu.",
+    fType:"Typ", fLabel:"Beschriftung (Deutsch)", fLabelEn:"Beschriftung (Englisch, optional)",
+    fRequired:"Pflichtfeld", fOptions:"Optionen", fOptDe:"Option (Deutsch)", fOptEn:"Englisch (optional)",
+    addOption:"Option hinzufügen", scaleMin:"Minimum", scaleMax:"Maximum",
+    scaleMinLabel:"Beschriftung Minimum (optional)", scaleMaxLabel:"Beschriftung Maximum (optional)",
+    moveUp:"Nach oben", moveDown:"Nach unten", removeField:"Feld entfernen",
+    tplNameRequired:"Bitte geben Sie der Vorlage einen Namen.",
+    t_shorttext:"Kurztext", t_longtext:"Langtext", t_scale:"Skala", t_single:"Einfachauswahl",
+    t_multi:"Mehrfachauswahl", t_yesno:"Ja/Nein", t_number:"Zahl", t_datetime:"Datum/Uhrzeit",
+    shareTitle:"Vorlage teilen", shareBody:"Kopieren Sie diesen Link und geben Sie ihn der patientenführenden Person weiter. Die Vorlage steckt vollständig im Link – ganz ohne Server.",
+    copyLink:"Link kopieren", copied:"Kopiert.", copyFail:"Kopieren nicht möglich – bitte manuell markieren.",
+    importTitle:"Vorlage übernehmen?", importBody:"Sie haben einen Vorlagen-Link geöffnet. Möchten Sie diese Vorlage auf diesem Gerät übernehmen?",
+    importDo:"Übernehmen", importSetActive:"Übernehmen und als aktiv setzen", importBad:"Der Link konnte nicht gelesen werden.",
+    imported:"Vorlage übernommen.",
+    yesLabel:"Ja", noLabel:"Nein", optional:"optional", toastCopied:"Kopiert.",
+    confirmDeleteTpl:"Diese Vorlage wirklich löschen?", renamePrompt:"Neuer Name:",
+    fieldsWord:"Felder",
+    entryCount:(n)=>n===1?"1 Eintrag":n+" Einträge",
+    adminTitle:"Vorlagen-Verwaltung", adminSub:"Geschützter Bereich für die therapeutische Praxis.",
+    adminPwLabel:"Passwort", adminPwWrong:"Falsches Passwort.", adminUnlock:"Öffnen",
+    adminLock:"Sperren",
+  },
+  en:{
+    appName:"Therapy Log",
+    langLabel:"Language",
+    chooseRole:"Welcome", chooseRoleSub:"How would you like to use the app?",
+    rolePatient:"I keep logs", rolePatientSub:"Patient mode – record entries and export",
+    roleTherapist:"I manage templates", roleTherapistSub:"Therapist mode – edit and share templates",
+    back:"Back", next:"Next", cancel:"Cancel", save:"Save", delete:"Delete",
+    confirm:"Apply", edit:"Edit", duplicate:"Duplicate", rename:"Rename", add:"Add", done:"Done",
+    insecureTitle:"Secure context required",
+    insecureBody:"This app encrypts your data using the browser’s built-in encryption. That is only available over HTTPS or localhost. It does not work from a file opened directly (file://) or over plain HTTP.",
+    insecureHow:"Please open the app via an HTTPS address or via http://localhost.",
+    installTitle:"Add to home screen first",
+    installBody:"So your entries stay safely stored, add the app to your home screen first and then set everything up via the new icon.",
+    installWhy:"Important: create your PIN and entries only after opening the app from the home-screen icon. Otherwise the data can be lost later – on iPhone in particular, the home-screen app stores data separately from the browser.",
+    installReopen:"Then open the app via the new icon on your home screen and continue there.",
+    installDetected:"A template link was detected. It will be applied once you continue.",
+    installContinue:"Continue in the browser (e.g. on a computer)",
+    ob5Warn:"There is no reset and no backup: if you forget the PIN or lose the device, the entries are gone. Your safety net: regularly send a PDF to your therapist.",
+    reminderIosHint:"Tip for iPhone: after tapping, an event preview appears – tap “Add” there to save it to your calendar.",
+    ob1Title:"Your data stays with you",
+    ob1Body:"Everything you enter here stays locally on this device. The app sends nothing to the internet on its own – no account, no server, no one reading along. Your therapist only receives what you send them yourself as a PDF.",
+    ob2Title:"Important: not an emergency channel",
+    ob2Body:"This app is not monitored. No one reads along or reacts to entries. If you feel acutely unwell or are in a crisis, please reach out right away:",
+    ob3Title:"Please remember well",
+    ob3Body:"Your data lives only on this device and is encrypted with your PIN. There is no backup and no reset: if you forget the PIN or lose or break the device, the entries are gone for good.",
+    ob3Safety:"Your safety net: add the app to your home screen and regularly send a PDF to your therapist.",
+    ob4Title:"Add to home screen",
+    ob4Body:"This protects your stored data – especially on iPhone, where the browser may otherwise delete data after about 7 days of no use.",
+    ob4iOS:"iPhone (Safari): tap the share icon at the bottom, then “Add to Home Screen”.",
+    ob4Android:"Android (Chrome): tap the menu (three dots) at the top right, then “Add to Home screen”.",
+    ob4Note:"You can do this now or later. The option is always available under “Settings”.",
+    obIntroTitle:"How to log",
+    obIntroBody:"Write down what’s true right now, as honestly and simply as you can. It doesn’t have to be perfect or complete. If you got something wrong, you can still change an entry later.",
+    ob5Title:"Set a PIN",
+    ob5Body:"You use this PIN to unlock the app and encrypt your entries. Choose something you can remember well and that is not easy to guess. Never share the PIN with anyone – not even your therapist.",
+    pinLabel:"PIN (at least 4 characters)", pinRepeat:"Repeat PIN",
+    pinMismatch:"The two entries do not match.",
+    pinTooShort:"Please use at least 4 characters.",
+    startProtocol:"Get started",
+    unlockTitle:"Unlock app", unlockBody:"Please enter your PIN.",
+    unlock:"Unlock", unlockWrong:"Wrong PIN. Your data stays encrypted.",
+    patientHome:"My logs", noActiveTpl:"No active template yet.",
+    noActiveTplBody:"Open a template link from your therapist. Then you can log here.",
+    chooseActiveTpl:"Choose template", activeTpl:"Active template", changeTpl:"Change template",
+    newEntry:"New entry", entries:"Entries", noEntries:"No entries yet. If you like, create your first one.",
+    resumeDraft:"Resume draft", draftPresent:"You have an unfinished entry.",
+    exportPdf:"Export as PDF", addReminder:"Calendar reminder", settings:"Settings",
+    switchToTherapist:"To templates (therapist)", switchToPatient:"To my logs",
+    entryTime:"Time", required:"required", saveEntry:"Save entry",
+    fillRequired:"Please fill in the required fields.", entrySaved:"Entry saved.",
+    deleteEntryQ:"Really delete this entry?", yes:"Yes", no:"No",
+    setName:"Name (appears in the PDF header)", setNameHint:"Full name, as your therapist can identify it.",
+    setPdfPw:"PDF password", setPdfPwHint:"Protects exported PDFs. Agree on it verbally with your therapist. It must differ from your app PIN.",
+    pdfPwEqualsPin:"The PDF password must not be identical to your app PIN. Please choose a different one.",
+    pdfPwSaved:"Saved.", crisisNumbers:"Emergency numbers", homeScreenHelp:"Add to home screen",
+    dangerZone:"Reset everything", dangerBody:"Deletes all entries, the template and settings on this device. Irreversible, no backup.",
+    resetConfirm:"Really delete everything irreversibly?", resetDone:"Everything deleted.",
+    exportTitle:"PDF export", exportNoName:"Please enter your name in settings first.",
+    exportNoPw:"Please set a PDF password in settings first.",
+    exportNoEntries:"There are no entries to export yet.",
+    exportRange:"Range", exportAll:"All entries", exportGenerate:"Create PDF",
+    exportReady:"PDF created and password-protected.", exportShare:"Share / Save",
+    from:"from", to:"to",
+    reminderTitle:"Calendar reminder", reminderNone:"No reminder time is set for this template.",
+    reminderBody:"A calendar entry (.ics) is created that your system calendar opens. The reminder then runs in the calendar – it opens the calendar, not the app automatically (the link is in the event).",
+    reminderTime:"Time", reminderFreq:"Repeat",
+    freqDAILY:"Daily", freqWEEKLY:"Weekly", freqNONE:"Once",
+    reminderDownload:"Add calendar entry", reminderOverrideHint:"You can adjust the time for yourself.",
+    tplLibrary:"Template library", tplLibrarySub:"Presets are editable. Changes are kept permanently. Duplicate for individual cases.",
+    newFromScratch:"New empty template", shareTpl:"Share (link)", useAsActive:"Use as active template",
+    editTplTitle:"Edit template", tplName:"Template name", tplNameEn:"Name (English, optional)",
+    reminderConfig:"Reminder (pre-set for patient)", reminderEnable:"Enable reminder",
+    patientCanOverride:"Patient may adjust the time",
+    fields:"Fields", addField:"Add field", noFields:"No fields yet. Add the first one.",
+    fType:"Type", fLabel:"Label (German)", fLabelEn:"Label (English, optional)",
+    fRequired:"Required", fOptions:"Options", fOptDe:"Option (German)", fOptEn:"English (optional)",
+    addOption:"Add option", scaleMin:"Minimum", scaleMax:"Maximum",
+    scaleMinLabel:"Minimum label (optional)", scaleMaxLabel:"Maximum label (optional)",
+    moveUp:"Move up", moveDown:"Move down", removeField:"Remove field",
+    tplNameRequired:"Please give the template a name.",
+    t_shorttext:"Short text", t_longtext:"Long text", t_scale:"Scale", t_single:"Single choice",
+    t_multi:"Multiple choice", t_yesno:"Yes/No", t_number:"Number", t_datetime:"Date/Time",
+    shareTitle:"Share template", shareBody:"Copy this link and give it to the person keeping the logs. The template is fully contained in the link – with no server.",
+    copyLink:"Copy link", copied:"Copied.", copyFail:"Copy failed – please select manually.",
+    importTitle:"Adopt template?", importBody:"You opened a template link. Would you like to adopt this template on this device?",
+    importDo:"Adopt", importSetActive:"Adopt and set active", importBad:"The link could not be read.",
+    imported:"Template adopted.",
+    yesLabel:"Yes", noLabel:"No", optional:"optional", toastCopied:"Copied.",
+    confirmDeleteTpl:"Really delete this template?", renamePrompt:"New name:",
+    fieldsWord:"fields",
+    entryCount:(n)=>n===1?"1 entry":n+" entries",
+    adminTitle:"Template management", adminSub:"Protected area for the therapy practice.",
+    adminPwLabel:"Password", adminPwWrong:"Wrong password.", adminUnlock:"Open",
+    adminLock:"Lock",
+  }
+};
+let LANG = (LS.get(LS_KEYS.prefs) && JSON.parse(LS.get(LS_KEYS.prefs)).lang) || "de";
+function t(key, ...args){ const v=I18N[LANG][key]; return typeof v==="function"? v(...args) : (v!==undefined?v:key); }
+function setLang(l){ LANG=l; const p=JSON.parse(LS.get(LS_KEYS.prefs)||"{}"); p.lang=l; LS.set(LS_KEYS.prefs, JSON.stringify(p)); render(); }
+document.documentElement.lang=LANG;
+
+/* =========================================================================
+   4. Feld-Inhalte: Zweisprachigkeit mit Fallback   [IDENTISCH in beiden Dateien]
+   ========================================================================= */
+function loc(de, en){ if(LANG==="en"){ return (en&&en.trim())? en : (de||""); } return de||""; }
+function fieldLabel(f){ return loc(f.label, f.labelEn); }
+function optLabel(o){ return loc(o.de, o.en); }
+function tplName(tpl){ return loc(tpl.name, tpl.nameEn); }
+
+/* =========================================================================
+   5. Template-Datenmodell + Presets   [Datenmodell IDENTISCH in beiden Dateien]
+   ========================================================================= */
+const FIELD_TYPES=["shorttext","longtext","scale","single","multi","yesno","number","datetime"];
+let __idc = 0;
+function uid(prefix){ __idc++; return (prefix||"id")+"_"+Date.now().toString(36)+"_"+__idc.toString(36); }
+function F(type, label, labelEn, extra){ return Object.assign({ id:uid("f"), type, label, labelEn:labelEn||"", required:false, options:[], min:0,max:10,minLabel:"",minLabelEn:"",maxLabel:"",maxLabelEn:"" }, extra||{}); }
+function opt(de,en){ return {de, en:en||""}; }
+
+function defaultPresets(){
+  return [
+    { id:uid("tpl"), name:"Aktivitäts- und Stimmungsprotokoll", nameEn:"Activity & mood log",
+      reminder:{enabled:true, time:"20:00", freq:"DAILY", patientCanOverride:true},
+      fields:[
+        F("datetime","Datum/Uhrzeit","Date/time",{required:true}),
+        F("shorttext","Aktivität","Activity",{required:true}),
+        F("scale","Stimmung vorher","Mood before",{min:0,max:10,minLabel:"sehr schlecht",minLabelEn:"very bad",maxLabel:"sehr gut",maxLabelEn:"very good"}),
+        F("scale","Stimmung nachher","Mood after",{min:0,max:10,minLabel:"sehr schlecht",minLabelEn:"very bad",maxLabel:"sehr gut",maxLabelEn:"very good"}),
+        F("longtext","Anmerkung","Note",{required:false})
+      ]},
+    { id:uid("tpl"), name:"Gedankenprotokoll", nameEn:"Thought record",
+      reminder:{enabled:false, time:"20:00", freq:"DAILY", patientCanOverride:true},
+      fields:[
+        F("datetime","Datum/Uhrzeit","Date/time",{required:true}),
+        F("longtext","Situation","Situation",{required:true}),
+        F("longtext","Automatischer Gedanke","Automatic thought",{required:true}),
+        F("shorttext","Gefühl","Feeling"),
+        F("scale","Intensität des Gefühls","Intensity of the feeling",{min:0,max:10,minLabel:"gar nicht",minLabelEn:"not at all",maxLabel:"maximal",maxLabelEn:"maximal"}),
+        F("longtext","Alternative Bewertung","Alternative appraisal")
+      ]},
+    { id:uid("tpl"), name:"Angst- und Expositionsprotokoll", nameEn:"Anxiety & exposure log",
+      reminder:{enabled:false, time:"18:00", freq:"DAILY", patientCanOverride:true},
+      fields:[
+        F("datetime","Datum/Uhrzeit","Date/time",{required:true}),
+        F("longtext","Situation/Reiz","Situation/trigger",{required:true}),
+        F("scale","Angst vor Exposition","Anxiety before exposure",{min:0,max:10,minLabel:"keine",minLabelEn:"none",maxLabel:"maximal",maxLabelEn:"maximal"}),
+        F("scale","Angst auf Höhepunkt","Anxiety at peak",{min:0,max:10,minLabel:"keine",minLabelEn:"none",maxLabel:"maximal",maxLabelEn:"maximal"}),
+        F("scale","Angst nach Exposition","Anxiety after exposure",{min:0,max:10,minLabel:"keine",minLabelEn:"none",maxLabel:"maximal",maxLabelEn:"maximal"}),
+        F("yesno","Vermeidung","Avoidance"),
+        F("longtext","Anmerkung","Note")
+      ]},
+    { id:uid("tpl"), name:"Schlafprotokoll", nameEn:"Sleep log",
+      reminder:{enabled:true, time:"08:00", freq:"DAILY", patientCanOverride:true},
+      fields:[
+        F("datetime","Datum","Date",{required:true}),
+        F("shorttext","Zubettgeh-Zeit","Bedtime"),
+        F("number","Einschlafdauer (Minuten)","Time to fall asleep (minutes)"),
+        F("number","Nächtliches Aufwachen (Anzahl)","Night awakenings (count)"),
+        F("shorttext","Aufwach-Zeit","Wake time"),
+        F("scale","Schlafqualität","Sleep quality",{min:0,max:10,minLabel:"sehr schlecht",minLabelEn:"very bad",maxLabel:"sehr gut",maxLabelEn:"very good"}),
+        F("longtext","Anmerkung","Note")
+      ]},
+    { id:uid("tpl"), name:"Schmerzprotokoll", nameEn:"Pain log",
+      reminder:{enabled:false, time:"20:00", freq:"DAILY", patientCanOverride:true},
+      fields:[
+        F("datetime","Datum/Uhrzeit","Date/time",{required:true}),
+        F("scale","Schmerzstärke","Pain intensity",{min:0,max:10,minLabel:"kein Schmerz",minLabelEn:"no pain",maxLabel:"stärkster vorstellbarer",maxLabelEn:"worst imaginable"}),
+        F("shorttext","Ort/Lokalisation","Location"),
+        F("multi","Art des Schmerzes","Type of pain",{options:[opt("dumpf","dull"),opt("stechend","stabbing"),opt("brennend","burning"),opt("pochend","throbbing")]}),
+        F("longtext","Auslöser/Situation","Trigger/situation"),
+        F("yesno","Medikament genommen","Medication taken"),
+        F("longtext","Anmerkung","Note")
+      ]}
+  ];
+}
+
+/* =========================================================================
+   6. Datenzugriff (Templates im Klartext; keine Patientendaten hier)
+   ========================================================================= */
+function loadTemplates(){
+  const raw=LS.get(LS_KEYS.templates);
+  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
+  const presets=defaultPresets(); LS.set(LS_KEYS.templates, JSON.stringify(presets)); return presets;
+}
+function saveTemplates(tpls){ LS.set(LS_KEYS.templates, JSON.stringify(tpls)); }
+
+const APP = { unlocked:false, templates:[], screen:"gate", editingTpl:null, shareId:null };
+
+/* =========================================================================
+   7. DOM-Helfer
+   ========================================================================= */
+function h(tag, props, ...kids){
+  const e=document.createElement(tag);
+  if(props){
+    for(const k in props){
+      const v=props[k];
+      if(v==null||v===false) continue;
+      if(k==="class") e.className=v;
+      else if(k==="text") e.textContent=v;
+      else if(k==="html") e.innerHTML=v;
+      else if(k.slice(0,2)==="on" && typeof v==="function") e.addEventListener(k.slice(2), v);
+      else if(k==="value") e.value=v;
+      else if(k==="checked") e.checked=!!v;
+      else e.setAttribute(k, v);
+    }
+  }
+  for(const kid of kids.flat()){
+    if(kid==null||kid===false) continue;
+    e.appendChild(typeof kid==="string"? document.createTextNode(kid) : kid);
+  }
+  return e;
+}
+function clear(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+function toast(text){
+  const old=document.querySelector(".toast"); if(old) old.remove();
+  const el=h("div",{class:"toast",role:"status",text});
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 2600);
+}
+
+/* =========================================================================
+   8. Kopf / Sprache
+   ========================================================================= */
+function leafSvg(){
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");
+  svg.setAttribute("class","leaf"); svg.setAttribute("viewBox","0 0 24 24"); svg.setAttribute("aria-hidden","true");
+  const p=document.createElementNS(NS,"path");
+  p.setAttribute("d","M12 21c-4-1-7-4-7-9 0-4 3-8 9-9 0 6-2 9-6 11 4 0 8-3 10-8 0 8-3 14-6 15z");
+  p.setAttribute("fill","var(--sage)");
+  svg.appendChild(p); return svg;
+}
+function topbar(showLang){
+  const bar=h("div",{class:"topbar"},
+    h("div",{class:"brand"}, leafSvg(), h("span",{text:t("adminTitle")}))
+  );
+  if(showLang!==false){
+    const tg=h("div",{class:"langtoggle",role:"group","aria-label":t("langLabel")},
+      h("button",{class:LANG==="de"?"on":"", onclick:()=>setLang("de"), "aria-pressed":LANG==="de"}, "DE"),
+      h("button",{class:LANG==="en"?"on":"", onclick:()=>setLang("en"), "aria-pressed":LANG==="en"}, "EN")
+    );
+    bar.appendChild(tg);
+  }
+  return bar;
+}
+
+/* =========================================================================
+   9. Screens
+   ========================================================================= */
+const app = ()=>document.getElementById("app");
+function mount(...nodes){ const a=app(); clear(a); const s=h("div",{class:"screen"}, ...nodes); a.appendChild(s); window.scrollTo(0,0); }
+
+// --- Passwort-Türschloss ---
+function screenGate(){
+  let pw="";
+  const errEl=h("p",{class:"small",style:"color:var(--danger)"});
+  const input=h("input",{type:"password", autocomplete:"current-password", "aria-label":t("adminPwLabel"),
+    oninput:e=>pw=e.target.value, onkeydown:e=>{ if(e.key==="Enter") submit(); }});
+  const submit=()=>{
+    if(pw===ADMIN_PASSWORT){ APP.unlocked=true; APP.templates=loadTemplates(); APP.screen="library"; render(); }
+    else { errEl.textContent=t("adminPwWrong"); }
+  };
+  mount(
+    topbar(),
+    h("div",{class:"card stack"},
+      h("h1",{text:t("adminTitle")}),
+      h("p",{class:"muted",text:t("adminSub")}),
+      h("div",{}, h("label",{text:t("adminPwLabel")}), input),
+      errEl,
+      h("button",{class:"btn block", onclick:submit}, t("adminUnlock"))
+    )
+  );
+}
+
+// --- Bibliothek ---
+function screenLibrary(){
+  const nodes=[ topbar(), h("h1",{text:t("tplLibrary")}), h("p",{class:"muted",text:t("tplLibrarySub")}) ];
+  nodes.push(h("button",{class:"btn block", onclick:()=>openTplEditor(null)}, "＋ "+t("newFromScratch")));
+
+  const list=h("div",{class:"stack"});
+  for(const tpl of APP.templates){
+    list.appendChild(h("div",{class:"card"},
+      h("div",{class:"spread"},
+        h("div",{class:"grow"},
+          h("div",{style:"font-weight:700",text:tplName(tpl)}),
+          h("div",{class:"small muted",text:tpl.fields.length+" "+t("fieldsWord")+(tpl.reminder&&tpl.reminder.enabled?" · ⏰ "+tpl.reminder.time:"")})
+        )
+      ),
+      h("div",{class:"row",style:"margin-top:10px"},
+        h("button",{class:"btn ghost small", onclick:()=>openTplEditor(tpl.id)}, t("edit")),
+        h("button",{class:"btn ghost small", onclick:()=>duplicateTpl(tpl.id)}, t("duplicate")),
+        h("button",{class:"btn ghost small", onclick:()=>renameTpl(tpl.id)}, t("rename")),
+        h("button",{class:"btn ghost small", onclick:()=>{ APP.shareId=tpl.id; APP.screen="share"; render(); }}, t("shareTpl")),
+        h("button",{class:"btn danger small", onclick:()=>deleteTpl(tpl.id)}, t("delete"))
+      )
+    ));
+  }
+  nodes.push(list);
+  nodes.push(h("hr",{class:"divider"}));
+  nodes.push(h("button",{class:"btn ghost", onclick:()=>{ APP.unlocked=false; APP.screen="gate"; render(); }}, t("adminLock")));
+  mount(...nodes);
+}
+function findTpl(id){ return APP.templates.find(x=>x.id===id); }
+function duplicateTpl(id){
+  const tpl=findTpl(id); if(!tpl) return;
+  const copy=JSON.parse(JSON.stringify(tpl));
+  copy.id=uid("tpl");
+  copy.name=(tpl.name||"Vorlage")+(LANG==="en"?" (copy)":" (Kopie)");
+  copy.fields.forEach(f=>f.id=uid("f"));
+  APP.templates.push(copy); saveTemplates(APP.templates); render();
+}
+function renameTpl(id){
+  const tpl=findTpl(id); if(!tpl) return;
+  const nn=window.prompt(t("renamePrompt"), tpl.name||"");
+  if(nn && nn.trim()){ tpl.name=nn.trim(); saveTemplates(APP.templates); render(); }
+}
+function deleteTpl(id){
+  if(!window.confirm(t("confirmDeleteTpl"))) return;
+  APP.templates=APP.templates.filter(x=>x.id!==id); saveTemplates(APP.templates); render();
+}
+
+// --- Editor ---
+function openTplEditor(id){
+  if(id){ APP.editingTpl=JSON.parse(JSON.stringify(findTpl(id))); }
+  else { APP.editingTpl={ id:uid("tpl"), name:"", nameEn:"", reminder:{enabled:false,time:"20:00",freq:"DAILY",patientCanOverride:true}, fields:[] }; }
+  APP.screen="editor"; render();
+}
+function screenEditor(){
+  const tpl=APP.editingTpl;
+  const errEl=h("p",{class:"small",style:"color:var(--danger)"});
+  const nameIn=h("input",{type:"text", value:tpl.name||"", oninput:e=>tpl.name=e.target.value});
+  const nameEnIn=h("input",{type:"text", value:tpl.nameEn||"", oninput:e=>tpl.nameEn=e.target.value});
+
+  if(!tpl.reminder) tpl.reminder={enabled:false,time:"20:00",freq:"DAILY",patientCanOverride:true};
+  const remEnable=h("input",{type:"checkbox", checked:tpl.reminder.enabled, onchange:e=>{ tpl.reminder.enabled=e.target.checked; render(); }});
+  const remBlock=h("div",{class:"stack"});
+  if(tpl.reminder.enabled){
+    const freqSel=h("select",{onchange:e=>tpl.reminder.freq=e.target.value},
+      ...["DAILY","WEEKLY","NONE"].map(fq=>h("option",{value:fq, selected:tpl.reminder.freq===fq}, t("freq"+fq))));
+    remBlock.append(
+      h("div",{class:"grid2"},
+        h("div",{}, h("label",{text:t("reminderTime")}), h("input",{type:"time", value:tpl.reminder.time||"20:00", onchange:e=>tpl.reminder.time=e.target.value})),
+        h("div",{}, h("label",{text:t("reminderFreq")}), freqSel)
+      ),
+      h("label",{class:"choice"},
+        h("input",{type:"checkbox", checked:tpl.reminder.patientCanOverride!==false, onchange:e=>tpl.reminder.patientCanOverride=e.target.checked}),
+        h("span",{text:t("patientCanOverride")})
+      )
+    );
+  }
+
+  const fieldsWrap=h("div",{class:"stack"});
+  if(tpl.fields.length===0) fieldsWrap.appendChild(h("p",{class:"muted",text:t("noFields")}));
+  tpl.fields.forEach((f,idx)=>fieldsWrap.appendChild(fieldEditor(f, idx, tpl)));
+
+  const save=()=>{
+    if(!tpl.name||!tpl.name.trim()){ errEl.textContent=t("tplNameRequired"); return; }
+    const existing=findTpl(tpl.id);
+    if(existing){ Object.assign(existing, tpl); }
+    else APP.templates.push(tpl);
+    saveTemplates(APP.templates);
+    APP.editingTpl=null; APP.screen="library"; render();
+  };
+
+  mount(
+    topbar(),
+    h("h1",{text:t("editTplTitle")}),
+    h("div",{class:"card stack"},
+      h("div",{}, h("label",{text:t("tplName")}), nameIn),
+      h("div",{}, h("label",{text:t("tplNameEn")}), nameEnIn)
+    ),
+    h("div",{class:"card stack"},
+      h("h3",{style:"margin-top:0",text:t("reminderConfig")}),
+      h("label",{class:"choice"}, remEnable, h("span",{text:t("reminderEnable")})),
+      remBlock
+    ),
+    h("div",{class:"card stack"},
+      h("div",{class:"spread"}, h("h3",{style:"margin:0",text:t("fields")}),
+        h("button",{class:"btn small", onclick:()=>{ tpl.fields.push(F("shorttext","","")); render(); }}, "＋ "+t("addField"))),
+      fieldsWrap
+    ),
+    errEl,
+    h("div",{class:"row"},
+      h("button",{class:"btn ghost", onclick:()=>{ APP.editingTpl=null; APP.screen="library"; render(); }}, t("cancel")),
+      h("button",{class:"btn grow", onclick:save}, t("save"))
+    )
+  );
+}
+function fieldEditor(f, idx, tpl){
+  const typeSel=h("select",{onchange:e=>{ f.type=e.target.value; if((f.type==="single"||f.type==="multi")&&(!f.options||!f.options.length)) f.options=[opt("",""),opt("","")]; render(); }},
+    ...FIELD_TYPES.map(ty=>h("option",{value:ty, selected:f.type===ty}, t("t_"+ty))));
+
+  const kids=[
+    h("div",{class:"spread"},
+      h("span",{class:"pill",text:"#"+(idx+1)}),
+      h("div",{class:"row"},
+        h("button",{class:"btn ghost small", disabled:idx===0, "aria-label":t("moveUp"), onclick:()=>{ const a=tpl.fields; [a[idx-1],a[idx]]=[a[idx],a[idx-1]]; render(); }},"↑"),
+        h("button",{class:"btn ghost small", disabled:idx===tpl.fields.length-1, "aria-label":t("moveDown"), onclick:()=>{ const a=tpl.fields; [a[idx+1],a[idx]]=[a[idx],a[idx+1]]; render(); }},"↓"),
+        h("button",{class:"btn danger small","aria-label":t("removeField"), onclick:()=>{ tpl.fields.splice(idx,1); render(); }}, "✕")
+      )
+    ),
+    h("div",{}, h("label",{text:t("fType")}), typeSel),
+    h("div",{}, h("label",{text:t("fLabel")}), h("input",{type:"text", value:f.label||"", oninput:e=>f.label=e.target.value})),
+    h("div",{}, h("label",{text:t("fLabelEn")}), h("input",{type:"text", value:f.labelEn||"", oninput:e=>f.labelEn=e.target.value})),
+    h("label",{class:"choice"}, h("input",{type:"checkbox", checked:!!f.required, onchange:e=>f.required=e.target.checked}), h("span",{text:t("fRequired")}))
+  ];
+
+  if(f.type==="scale"){
+    kids.push(h("div",{class:"grid2"},
+      h("div",{}, h("label",{text:t("scaleMin")}), h("input",{type:"number", value:f.min!=null?f.min:0, oninput:e=>f.min=Number(e.target.value)})),
+      h("div",{}, h("label",{text:t("scaleMax")}), h("input",{type:"number", value:f.max!=null?f.max:10, oninput:e=>f.max=Number(e.target.value)}))
+    ));
+    kids.push(h("div",{class:"grid2"},
+      h("div",{}, h("label",{text:t("scaleMinLabel")}), h("input",{type:"text", value:f.minLabel||"", oninput:e=>f.minLabel=e.target.value})),
+      h("div",{}, h("label",{text:t("scaleMaxLabel")}), h("input",{type:"text", value:f.maxLabel||"", oninput:e=>f.maxLabel=e.target.value}))
+    ));
+    kids.push(h("div",{class:"grid2"},
+      h("div",{}, h("label",{class:"small",text:t("scaleMinLabel")+" (EN)"}), h("input",{type:"text", value:f.minLabelEn||"", oninput:e=>f.minLabelEn=e.target.value})),
+      h("div",{}, h("label",{class:"small",text:t("scaleMaxLabel")+" (EN)"}), h("input",{type:"text", value:f.maxLabelEn||"", oninput:e=>f.maxLabelEn=e.target.value}))
+    ));
+  }
+  if(f.type==="single"||f.type==="multi"){
+    if(!Array.isArray(f.options)) f.options=[];
+    const optWrap=h("div",{class:"stack"});
+    f.options.forEach((o,oi)=>{
+      optWrap.appendChild(h("div",{class:"grid2", style:"align-items:end"},
+        h("div",{}, h("label",{class:"small",text:t("fOptDe")}), h("input",{type:"text", value:o.de||"", oninput:e=>o.de=e.target.value})),
+        h("div",{class:"row",style:"align-items:end"},
+          h("div",{class:"grow"}, h("label",{class:"small",text:t("fOptEn")}), h("input",{type:"text", value:o.en||"", oninput:e=>o.en=e.target.value})),
+          h("button",{class:"btn danger small", onclick:()=>{ f.options.splice(oi,1); render(); }}, "✕")
+        )
+      ));
+    });
+    kids.push(h("div",{}, h("label",{text:t("fOptions")}), optWrap,
+      h("button",{class:"btn ghost small",style:"margin-top:8px", onclick:()=>{ f.options.push(opt("","")); render(); }}, "＋ "+t("addOption"))));
+  }
+
+  return h("div",{class:"fielded stack"}, ...kids);
+}
+
+// --- Teilen (Link) ---
+function screenShare(){
+  const tpl=findTpl(APP.shareId);
+  if(!tpl){ APP.screen="library"; render(); return; }
+  const link=PROTOKOLL_APP_URL+"#tpl="+encodeObjToHash(tpl);
+  const ta=h("textarea",{readonly:true, style:"min-height:130px; font-family:monospace; font-size:.85rem"}, link);
+  const copy=async ()=>{
+    try{ await navigator.clipboard.writeText(link); toast(t("copied")); }
+    catch(e){ ta.focus(); ta.select(); toast(t("copyFail")); }
+  };
+  mount(
+    topbar(),
+    h("h1",{text:t("shareTitle")}),
+    h("div",{class:"card stack"},
+      h("div",{class:"spread"}, h("span",{style:"font-weight:700",text:tplName(tpl)}), h("span",{class:"pill",text:link.length+" chars"})),
+      h("p",{class:"muted",text:t("shareBody")}),
+      ta,
+      h("button",{class:"btn block", onclick:copy}, t("copyLink"))
+    ),
+    h("button",{class:"btn ghost", onclick:()=>{ APP.shareId=null; APP.screen="library"; render(); }}, "‹ "+t("back"))
+  );
+}
+
+/* =========================================================================
+   10. Router + Start
+   ========================================================================= */
+function render(){
+  document.documentElement.lang=LANG;
+  if(!APP.unlocked){ return screenGate(); }
+  switch(APP.screen){
+    case "library": return screenLibrary();
+    case "editor": return screenEditor();
+    case "share": return screenShare();
+    default: return screenLibrary();
+  }
+}
+function boot(){
+  // Kein WebCrypto nötig (keine Patientendaten), daher kein Secure-Context-Zwang.
+  APP.screen="gate"; render();
+}
+boot();
+</script>
